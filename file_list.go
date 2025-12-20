@@ -69,10 +69,10 @@ type ListFilesRequest struct {
 // The response will include metadata about each file, such as the file ID, name, size, and type.
 // We use cursor-based pagination to return the files in pages. A page has the following fields:
 //
-// - Items: An array of file metadata, each containing the fields described below.
-// - HasMore: A boolean indicating whether there are more files available beyond the current page.
-// - NextCursor: A base64-encoded cursor for the next page of results. If HasMore is false, this field will be null.
-// - PrevCursor: A base64-encoded cursor for the previous page of results. If this is the first page, this field will be null.
+//   - Items: An array of file metadata, each containing the fields described below.
+//   - HasMore: A boolean indicating whether there are more files available beyond the current page.
+//   - NextCursor: A base64-encoded cursor for the next page of results. If HasMore is false, this field will be null.
+//   - PrevCursor: A base64-encoded cursor for the previous page of results. If this is the first page, this field will be null.
 func (c *Client) ListFiles(ctx context.Context, in *ListFilesRequest) (*PaginationResult[FileInfo], error) {
 	reqURL := fmt.Sprintf("%s/files", c.baseURL)
 	params := url.Values{}

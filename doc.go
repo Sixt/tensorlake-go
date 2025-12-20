@@ -17,4 +17,33 @@
 // Tensorlake enables document parsing, structured data extraction, and page
 // classification for various document formats including PDF, DOCX, PPTX, images,
 // and more.
+//
+// # Getting Started
+//
+// Create a client with your API key:
+//
+//	c := tensorlake.NewClient(
+//		tensorlake.WithRegion(tensorlake.RegionOnPrem),
+//		tensorlake.WithBaseURL("https://api.your-domain.com"),
+//		tensorlake.WithAPIKey("your-api-key"),
+//	)
+//
+// # Uploading a File
+//
+// Upload a file to the project:
+//
+//	file, err := os.Open("path/to/your/file.pdf")
+//	if err != nil {
+//		log.Fatal(err)
+//	}
+//	defer file.Close()
+//
+//	r, err := c.UploadFile(context.Background(), &tensorlake.UploadFileRequest{
+//		FileBytes: file,
+//		FileName:  "your-file.pdf",
+//		Labels:    map[string]string{"category": "label-1", "subcategory": "label-2"},
+//	})
+//	if err != nil {
+//		log.Fatal(err)
+//	}
 package tensorlake
