@@ -16,6 +16,7 @@ package tensorlake
 
 import (
 	"net/http"
+	"os"
 	"testing"
 )
 
@@ -80,4 +81,23 @@ func TestNewClient(t *testing.T) {
 			t.Fatal("NewClient returned nil")
 		}
 	})
+
+	t.Run("with on-premise region", func(t *testing.T) {
+		client := initializeTestClient(t)
+
+		if client == nil {
+			t.Fatal("NewClient returned nil")
+		}
+	})
+}
+
+func initializeTestClient(t *testing.T) *Client {
+	base := os.Getenv("TENSORLAKE_BASE_URL")
+	apiKey := os.Getenv("TENSORLAKE_API_KEY")
+	region := RegionOnPrem
+	if base == "" || apiKey == "" {
+		t.Skip("TENSORLAKE_BASE_URL and TENSORLAKE_API_KEY must be set")
+	}
+
+	return NewClient(WithBaseURL(base), WithAPIKey(apiKey), WithRegion(region))
 }
