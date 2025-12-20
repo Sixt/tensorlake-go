@@ -233,3 +233,10 @@ const (
 	PageFragmentTypeStrikethrough  PageFragmentType = "strikethrough"
 	PageFragmentTypeBarcode        PageFragmentType = "barcode"
 )
+
+type PaginationDirection string
+
+const (
+	PaginationDirectionNext PaginationDirection = "next"
+	PaginationDirectionPrev PaginationDirection = "prev"
+)

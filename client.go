@@ -15,6 +15,9 @@
 package tensorlake
 
 import (
+	"encoding/json"
+	"fmt"
+	"io"
 	"net/http"
 	"os"
 )
@@ -80,4 +83,37 @@ func NewClient(opts ...Option) *Client {
 		client.baseURL = "https://api.tensorlake.ai/documents/v2"
 	}
 	return client
+}
+
+func do[T any](c *Client, req *http.Request, successHandler func(io.Reader) (T, error)) (T, error) {
+	var zero T
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.apiKey))
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return zero, fmt.Errorf("failed to execute request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	switch {
+	case resp.StatusCode >= 200 && resp.StatusCode < 300:
+		if successHandler != nil {
+			return successHandler(resp.Body)
+		}
+		return zero, nil
+
+	case resp.StatusCode >= 400:
+		var errRes ErrorResponse
+		if err := json.NewDecoder(resp.Body).Decode(&errRes); err != nil {
+			return zero, fmt.Errorf("failed to decode error response (%d): %w", resp.StatusCode, err)
+		}
+		return zero, &errRes
+
+	default:
+		bodyBytes, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20)) // Limit to 1MB
+		return zero, fmt.Errorf("unexpected status code %d: %s", resp.StatusCode, string(bodyBytes))
+	}
+
 }
