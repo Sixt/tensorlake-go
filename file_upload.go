@@ -55,6 +55,7 @@ type FileUploadResponse struct {
 }
 
 // UploadFile uploads a file to Tensorlake Cloud.
+//
 // The file will be associated with the project specified by the API key
 // used in the request.
 //
@@ -78,7 +79,6 @@ type FileUploadResponse struct {
 //
 // Labels can be added to the file to help categorize the parse jobs associated with it.
 // Labels are key-value pairs that can be used to filter and organize files.
-//
 // These should be provided in the a labels text field in the multipart form data.
 // Labels are optional, but they can be very useful for organizing and managing parse jobs.
 //
@@ -98,6 +98,18 @@ func (c *Client) UploadFile(ctx context.Context, in *UploadFileRequest) (*FileUp
 	pipeReader, pipeWriter := io.Pipe()
 	writer := multipart.NewWriter(pipeWriter)
 	contentType := writer.FormDataContentType()
+
+	// Create request before spawning goroutine to avoid goroutine leak
+	// if request creation fails (e.g., cancelled context or invalid URL)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut, c.baseURL+"/files", pipeReader)
+	if err != nil {
+		pipeReader.Close()
+		pipeWriter.Close()
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("Authorization", "Bearer "+c.apiKey)
+	req.Header.Set("Content-Type", contentType)
 
 	// Write multipart data in goroutine
 	errChan := make(chan error, 1)
@@ -133,16 +145,11 @@ func (c *Client) UploadFile(ctx context.Context, in *UploadFileRequest) (*FileUp
 		errChan <- nil
 	}()
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPut, c.baseURL+"/files", pipeReader)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
-	}
-
-	req.Header.Set("Authorization", "Bearer "+c.apiKey)
-	req.Header.Set("Content-Type", contentType)
-
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
+		// Close pipeReader to unblock the goroutine writing to pipeWriter
+		pipeReader.Close()
+		<-errChan // Wait for goroutine to finish
 		return nil, fmt.Errorf("failed to execute request: %w", err)
 	}
 	defer resp.Body.Close()

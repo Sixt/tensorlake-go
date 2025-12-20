@@ -15,9 +15,15 @@
 package tensorlake
 
 import (
+	"bytes"
+	"context"
+	"errors"
+	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
+	"time"
 )
 
 // TestFileManagement tests the file management functionality.
@@ -163,4 +169,92 @@ func fetchAllFiles(t *testing.T, c *Client) ([]string, error) {
 		}
 	}
 	return files, err
+}
+
+// TestUploadFileNoGoroutineLeak tests that the UploadFile function
+// doesn't leak goroutines when the context is cancelled before the
+// HTTP request can be executed.
+func TestUploadFileNoGoroutineLeak(t *testing.T) {
+	// Count goroutines before
+	before := runtime.NumGoroutine()
+
+	// Create a cancelled context
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	// Create a client with a cancelled context scenario
+	c := NewClient(
+		WithBaseURL("http://localhost:9999"),
+		WithAPIKey("test-key"),
+	)
+
+	// Try to upload a file with cancelled context
+	_, err := c.UploadFile(ctx, &UploadFileRequest{
+		FileBytes: bytes.NewReader([]byte("test data")),
+		FileName:  "test.txt",
+	})
+
+	// Should get an error
+	if err == nil {
+		t.Fatal("expected error with cancelled context")
+	}
+
+	// Give any leaked goroutines a moment to manifest
+	time.Sleep(100 * time.Millisecond)
+
+	// Count goroutines after
+	after := runtime.NumGoroutine()
+
+	// Allow for some variance (the exact count can fluctuate)
+	// but we shouldn't have leaked more than 1 goroutine
+	if after > before+1 {
+		t.Errorf("possible goroutine leak: before=%d, after=%d, leaked=%d", before, after, after-before)
+	}
+}
+
+// TestUploadFileWithHTTPError tests that the UploadFile function
+// properly cleans up when the HTTP request fails.
+func TestUploadFileWithHTTPError(t *testing.T) {
+	// Count goroutines before
+	before := runtime.NumGoroutine()
+
+	// Create a custom HTTP client that always returns an error
+	errorClient := &http.Client{
+		Transport: &errorRoundTripper{},
+	}
+
+	c := NewClient(
+		WithBaseURL("http://localhost:9999"),
+		WithAPIKey("test-key"),
+		WithHTTPClient(errorClient),
+	)
+
+	// Try to upload a file
+	_, err := c.UploadFile(context.Background(), &UploadFileRequest{
+		FileBytes: bytes.NewReader([]byte("test data")),
+		FileName:  "test.txt",
+	})
+
+	// Should get an error
+	if err == nil {
+		t.Fatal("expected error with failing HTTP client")
+	}
+
+	// Give any leaked goroutines a moment to manifest
+	time.Sleep(100 * time.Millisecond)
+
+	// Count goroutines after
+	after := runtime.NumGoroutine()
+
+	// Allow for some variance but we shouldn't have leaked goroutines
+	if after > before+1 {
+		t.Errorf("possible goroutine leak: before=%d, after=%d, leaked=%d", before, after, after-before)
+	}
+}
+
+// errorRoundTripper is a http.RoundTripper that always returns an error
+type errorRoundTripper struct{}
+
+func (e *errorRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
+	return nil, errors.New("simulated network error")
 }
