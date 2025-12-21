@@ -85,8 +85,8 @@ func TestClassifyDocument(t *testing.T) {
 				t.Logf("classify document done, parse ID: %s", r.ParseId)
 
 				// Get parse result.
-				result, err := c.GetParseResult(t.Context(), r.ParseId, WithSSE(true), WithOnUpdate(func(eventName string, _ *ParseResult) {
-					t.Logf("parse status: %s", eventName)
+				result, err := c.GetParseResult(t.Context(), r.ParseId, WithSSE(true), WithOnUpdate(func(name ParseEventName, _ *ParseResult) {
+					t.Logf("parse status: %s", name)
 				}))
 				if err != nil {
 					t.Fatalf("failed to get parse result: %v", err)

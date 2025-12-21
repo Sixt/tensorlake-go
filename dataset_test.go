@@ -89,8 +89,8 @@ func TestDataset(t *testing.T) {
 	t.Logf("dataset parse job: %+v", p)
 
 	// Get parse job results.
-	r, err := c.GetParseResult(t.Context(), p.ParseId, WithSSE(true), WithOnUpdate(func(eventName string, _ *ParseResult) {
-		t.Logf("parse status: %s", eventName)
+	r, err := c.GetParseResult(t.Context(), p.ParseId, WithSSE(true), WithOnUpdate(func(name ParseEventName, _ *ParseResult) {
+		t.Logf("parse status: %s", name)
 	}))
 	if err != nil {
 		t.Fatalf("failed to get parse job result: %v", err)

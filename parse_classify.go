@@ -33,6 +33,10 @@ type ClassifyDocumentRequest struct {
 }
 
 // ClassifyDocument submits a document for page classification.
+//
+// See also: [Classify Document API Reference]
+//
+// [Classify Document API Reference]: https://docs.tensorlake.ai/api-reference/v2/parse/classify
 func (c *Client) ClassifyDocument(ctx context.Context, in *ClassifyDocumentRequest) (*ParseJob, error) {
 	if !in.SourceProvided() {
 		return nil, fmt.Errorf("exactly one of file_id, file_url, or raw_text must be provided")

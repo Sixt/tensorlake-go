@@ -90,12 +90,16 @@ type CreateDatasetResponse struct {
 }
 
 // CreateDataset creates a new dataset.
+//
+// See also: [Create Dataset API Reference]
+//
+// [Create Dataset API Reference]: https://docs.tensorlake.ai/api-reference/v2/datasets/create
 func (c *Client) CreateDataset(ctx context.Context, in *CreateDatasetRequest) (*CreateDatasetResponse, error) {
 	b, err := json.Marshal(in)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
-	
+
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/datasets", bytes.NewReader(b))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)

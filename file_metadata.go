@@ -35,6 +35,10 @@ type FileInfo struct {
 }
 
 // GetFileMetadata retrieves metadata for a specific file.
+//
+// See also: [Get File Metadata API Reference]
+//
+// [Get File Metadata API Reference]: https://docs.tensorlake.ai/api-reference/v2/files/get-metadata
 func (c *Client) GetFileMetadata(ctx context.Context, fileId string) (*FileInfo, error) {
 	reqURL := fmt.Sprintf("%s/files/%s/metadata", c.baseURL, url.PathEscape(fileId))
 

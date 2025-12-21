@@ -34,6 +34,10 @@ type ParseDatasetRequest struct {
 }
 
 // ParseDataset parses a document using a dataset's configuration.
+//
+// See also: [Parse Dataset API Reference]
+//
+// [Parse Dataset API Reference]: https://docs.tensorlake.ai/api-reference/v2/datasets/parse
 func (c *Client) ParseDataset(ctx context.Context, in *ParseDatasetRequest) (*ParseJob, error) {
 	if !in.SourceProvided() {
 		return nil, fmt.Errorf("exactly one of file_id, file_url, or raw_text must be provided")

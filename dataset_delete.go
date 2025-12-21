@@ -21,6 +21,10 @@ import (
 )
 
 // DeleteDataset deletes a dataset from Tensorlake.
+//
+// See also: [Delete Dataset API Reference]
+//
+// [Delete Dataset API Reference]: https://docs.tensorlake.ai/api-reference/v2/datasets/delete
 func (c *Client) DeleteDataset(ctx context.Context, datasetId string) error {
 	reqURL := fmt.Sprintf("%s/datasets/%s", c.baseURL, datasetId)
 

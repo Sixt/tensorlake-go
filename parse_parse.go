@@ -78,6 +78,10 @@ type ParseDocumentRequest struct {
 }
 
 // ParseDocument submits a document for comprehensive parsing (read, extract, and classify).
+//
+// See also: [Parse Document API Reference]
+//
+// [Parse Document API Reference]: https://docs.tensorlake.ai/api-reference/v2/parse/parse
 func (c *Client) ParseDocument(ctx context.Context, in *ParseDocumentRequest) (*ParseJob, error) {
 	if !in.SourceProvided() {
 		return nil, fmt.Errorf("exactly one of file_id, file_url, or raw_text must be provided")

@@ -65,6 +65,10 @@ type ListParseJobsRequest struct {
 }
 
 // ListParseJobs lists parse jobs in the Tensorlake project.
+//
+// See also: [List Parse Jobs API Reference]
+//
+// [List Parse Jobs API Reference]: https://docs.tensorlake.ai/api-reference/v2/parse/list
 func (c *Client) ListParseJobs(ctx context.Context, in *ListParseJobsRequest) (*PaginationResult[ParseResult], error) {
 	reqURL := c.baseURL + "/parse"
 	params := url.Values{}

@@ -23,6 +23,10 @@ import (
 )
 
 // GetDataset retrieves details for a specific dataset.
+//
+// See also: [Get Dataset API Reference]
+//
+// [Get Dataset API Reference]: https://docs.tensorlake.ai/api-reference/v2/datasets/get
 func (c *Client) GetDataset(ctx context.Context, datasetId string) (*Dataset, error) {
 	reqURL := fmt.Sprintf("%s/datasets/%s", c.baseURL, datasetId)
 

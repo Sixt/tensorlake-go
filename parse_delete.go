@@ -23,7 +23,11 @@ import (
 // DeleteParseJob deletes a previously submitted parse job. This will
 // remove the parse job and its associated settings from the system.
 // Deleting a parse job does not delete the original file used for parsing,
-// nor does it affect any other parse jobs that may have been created from the same file.
+// nor does it affect any other parse jobs that may have been created from the same file
+//
+// See also: [Delete Parse Job API Reference]
+//
+// [Delete Parse Job API Reference]: https://docs.tensorlake.ai/api-reference/v2/parse/delete
 func (c *Client) DeleteParseJob(ctx context.Context, parseId string) error {
 	reqURL := fmt.Sprintf("%s/parse/%s", c.baseURL, parseId)
 	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, reqURL, nil)
