@@ -19,9 +19,37 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"iter"
 	"net/http"
 	"net/url"
 )
+
+// IterFiles iterates over all files in the project.
+func (c *Client) IterFiles(ctx context.Context, limit int, direction PaginationDirection) iter.Seq2[FileInfo, error] {
+	return func(yield func(FileInfo, error) bool) {
+		cursor := ""
+		for {
+			listResp, err := c.ListFiles(ctx, &ListFilesRequest{
+				Cursor:    cursor,
+				Limit:     limit,
+				Direction: direction,
+			})
+			if err != nil {
+				yield(FileInfo{}, err)
+				return
+			}
+			for _, file := range listResp.Items {
+				if !yield(file, nil) {
+					return
+				}
+			}
+			cursor = listResp.NextCursor
+			if !listResp.HasMore {
+				return
+			}
+		}
+	}
+}
 
 // ListFilesRequest holds options for listing files.
 type ListFilesRequest struct {

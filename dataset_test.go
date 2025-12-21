@@ -38,7 +38,13 @@ func TestDataset(t *testing.T) {
 	t.Logf("dataset created: %+v", ds)
 
 	// List datasets.
-	datasets := fetchAllDatasets(t, c)
+	datasets := []string{}
+	for d, err := range c.IterDatasets(t.Context(), 1, PaginationDirectionNext) {
+		if err != nil {
+			t.Fatalf("failed to list datasets: %v", err)
+		}
+		datasets = append(datasets, d.DatasetId)
+	}
 	t.Logf("listed %d datasets: %v", len(datasets), datasets)
 
 	// Check if the created dataset is in the list.
@@ -106,7 +112,13 @@ func TestDataset(t *testing.T) {
 	t.Logf("dataset deleted")
 
 	// Check if the dataset is deleted.
-	datasets = fetchAllDatasets(t, c)
+	datasets = []string{}
+	for d, err := range c.IterDatasets(t.Context(), 1, PaginationDirectionNext) {
+		if err != nil {
+			t.Fatalf("failed to list datasets: %v", err)
+		}
+		datasets = append(datasets, d.DatasetId)
+	}
 	t.Logf("listed %d datasets: %v", len(datasets), datasets)
 	if slices.Contains(datasets, ds.DatasetId) {
 		t.Fatalf("dataset %s is not deleted and found in list: %v", ds.DatasetId, datasets)

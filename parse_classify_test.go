@@ -100,7 +100,13 @@ func TestClassifyDocument(t *testing.T) {
 				t.Logf("page classes: %v", result.PageClasses)
 
 				// Validate classify results.
-				jobs := fetchAllParseJobs(t, c)
+				jobs := []string{}
+				for j, err := range c.IterParseJobs(t.Context(), 1, PaginationDirectionNext) {
+					if err != nil {
+						t.Fatalf("failed to list parse jobs: %v", err)
+					}
+					jobs = append(jobs, j.ParseId)
+				}
 				t.Logf("parse jobs: %v", jobs)
 				if !slices.Contains(jobs, r.ParseId) {
 					t.Fatalf("parse job is not found in list: %v", jobs)

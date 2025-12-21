@@ -27,7 +27,14 @@ func testCleanupFileAndParseJob(t *testing.T, c *Client, fileId string, parseId 
 		}
 
 		// Check if file is deleted.
-		files := fetchAllFiles(t, c)
+		files := []string{}
+		for f, err := range c.IterFiles(t.Context(), 1, PaginationDirectionNext) {
+			if err != nil {
+				t.Fatalf("failed to list files: %v", err)
+			}
+			files = append(files, f.FileId)
+		}
+		t.Logf("listed %d files: %v", len(files), files)
 		if slices.Contains(files, fileId) {
 			t.Fatalf("file is not deleted and found in list: %v", files)
 		}
@@ -40,82 +47,16 @@ func testCleanupFileAndParseJob(t *testing.T, c *Client, fileId string, parseId 
 		}
 
 		// Check if parse job is deleted.
-		jobs := fetchAllParseJobs(t, c)
+		jobs := []string{}
+		for j, err := range c.IterParseJobs(t.Context(), 1, PaginationDirectionNext) {
+			if err != nil {
+				t.Fatalf("failed to list parse jobs: %v", err)
+			}
+			jobs = append(jobs, j.ParseId)
+		}
+		t.Logf("listed %d parse jobs: %v", len(jobs), jobs)
 		if slices.Contains(jobs, parseId) {
 			t.Fatalf("parse job is not deleted and found in list: %v", jobs)
 		}
 	}
-}
-
-func fetchAllFiles(t *testing.T, c *Client) []string {
-	files, cursor := []string{}, ""
-	for {
-		listResp, err := c.ListFiles(t.Context(), &ListFilesRequest{
-			Cursor:    cursor,
-			Limit:     1,
-			Direction: PaginationDirectionNext,
-		})
-		if err != nil {
-			t.Fatalf("failed to list files: %v", err)
-		}
-		if len(listResp.Items) == 0 {
-			break
-		}
-
-		files = append(files, listResp.Items[0].FileId)
-		cursor = listResp.NextCursor
-
-		if !listResp.HasMore {
-			break
-		}
-	}
-	return files
-}
-
-func fetchAllParseJobs(t *testing.T, c *Client) []string {
-	jobs, cursor := []string{}, ""
-	for {
-		listResp, err := c.ListParseJobs(t.Context(), &ListParseJobsRequest{
-			Cursor:    cursor,
-			Limit:     1,
-			Direction: PaginationDirectionNext,
-		})
-		if err != nil {
-			t.Fatalf("failed to list parse jobs: %v", err)
-		}
-		if len(listResp.Items) == 0 {
-			break
-		}
-		jobs = append(jobs, listResp.Items[0].ParseId)
-		cursor = listResp.NextCursor
-
-		if !listResp.HasMore {
-			break
-		}
-	}
-	return jobs
-}
-
-func fetchAllDatasets(t *testing.T, c *Client) []string {
-	datasets, cursor := []string{}, ""
-	for {
-		listResp, err := c.ListDatasets(t.Context(), &ListDatasetsRequest{
-			Cursor:    cursor,
-			Limit:     1,
-			Direction: PaginationDirectionNext,
-		})
-		if err != nil {
-			t.Fatalf("failed to list datasets: %v", err)
-		}
-		if len(listResp.Items) == 0 {
-			break
-		}
-		datasets = append(datasets, listResp.Items[0].DatasetId)
-		cursor = listResp.NextCursor
-
-		if !listResp.HasMore {
-			break
-		}
-	}
-	return datasets
 }
