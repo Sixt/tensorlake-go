@@ -1,0 +1,96 @@
+// Copyright 2025 SIXT SE
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package tensorlake
+
+import (
+	"testing"
+	"time"
+)
+
+func TestReadDocument(t *testing.T) {
+	c := initializeTestClient(t)
+
+	tests := []struct {
+		req *ReadDocumentRequest
+	}{
+		{
+			req: &ReadDocumentRequest{
+				FileSource: FileSource{
+					FileURL: "https://www.sixt.de/shared/t-c/sixt_DE_de.pdf",
+				},
+				ParsingOptions: &ParsingOptions{
+					ChunkingStrategy: ChunkingStrategyNone,
+				},
+				EnrichmentOptions: &EnrichmentOptions{
+					TableSummarization: true,
+				},
+				Labels: map[string]string{"category": "terms-and-conditions"},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.req.FileSource.FileURL, func(t *testing.T) {
+			func() {
+				// Trigger read document operation.
+				r, err := c.ReadDocument(t.Context(), tt.req)
+				if err != nil {
+					t.Fatalf("failed to read document: %v", err)
+				}
+				if r == nil {
+					t.Fatal("response is nil")
+				}
+				t.Logf("read document done, parse ID: %s", r.ParseId)
+
+				// Read document status.
+
+				var success bool
+				var latestStatus ParseStatus
+				var result *ParseResult
+			pollLoop:
+				for range 10 {
+					result, err = c.GetParseResult(t.Context(), r.ParseId)
+					if err != nil {
+						t.Fatalf("failed to get parse result: %v", err)
+					}
+					latestStatus = result.Status
+
+					switch latestStatus {
+					case ParseStatusSuccessful:
+						success = true
+						break pollLoop
+					case ParseStatusFailure:
+						t.Fatalf("Parse failed")
+					default:
+						t.Logf("Parse status: %s, retrying...", latestStatus)
+					}
+					time.Sleep(2 * time.Second)
+				}
+				if !success {
+					t.Fatalf("parse still on going... status (%s)", string(latestStatus))
+				}
+				if len(result.Chunks) == 0 {
+					t.Fatalf("no chunks found")
+				}
+				peak := result.Chunks[0].Content
+				if len(peak) > 100 {
+					peak = peak[:100]
+				}
+				t.Logf("parse result: %+v", peak)
+
+				// Nothing to delete here.
+			}()
+		})
+	}
+}
