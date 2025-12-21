@@ -453,13 +453,13 @@ for _, job := range response.Items {
 ### Iterate All Parse Jobs
 
 ```go
-func (c *Client) IterParseJobs(ctx context.Context, limit int, direction PaginationDirection) iter.Seq2[ParseResult, error]
+func (c *Client) IterParseJobs(ctx context.Context, batchSize int) iter.Seq2[ParseResult, error]
 ```
 
 **Example:**
 
 ```go
-for job, err := range client.IterParseJobs(context.Background(), 50, tensorlake.PaginationDirectionNext) {
+for job, err := range client.IterParseJobs(context.Background(), 50) {
     if err != nil {
         log.Fatal(err)
     }

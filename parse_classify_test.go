@@ -101,7 +101,7 @@ func TestClassifyDocument(t *testing.T) {
 
 				// Validate classify results.
 				jobs := []string{}
-				for j, err := range c.IterParseJobs(t.Context(), 1, PaginationDirectionNext) {
+				for j, err := range c.IterParseJobs(t.Context(), 1) {
 					if err != nil {
 						t.Fatalf("failed to list parse jobs: %v", err)
 					}

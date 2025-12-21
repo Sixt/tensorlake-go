@@ -39,7 +39,7 @@ func TestDataset(t *testing.T) {
 
 	// List datasets.
 	datasets := []string{}
-	for d, err := range c.IterDatasets(t.Context(), 1, PaginationDirectionNext) {
+	for d, err := range c.IterDatasets(t.Context(), 1) {
 		if err != nil {
 			t.Fatalf("failed to list datasets: %v", err)
 		}
@@ -113,7 +113,7 @@ func TestDataset(t *testing.T) {
 
 	// Check if the dataset is deleted.
 	datasets = []string{}
-	for d, err := range c.IterDatasets(t.Context(), 1, PaginationDirectionNext) {
+	for d, err := range c.IterDatasets(t.Context(), 1) {
 		if err != nil {
 			t.Fatalf("failed to list datasets: %v", err)
 		}

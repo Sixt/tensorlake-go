@@ -194,12 +194,14 @@ result, err := c.GetParseResult(
     tensorlake.WithSSE(true),
     tensorlake.WithOnUpdate(func(name tensorlake.ParseEventName, r *tensorlake.ParseResult) {
         switch eventName {
-        case tensorlake.sseEventParseQueued:
+        case tensorlake.SSEEventParseQueued:
             fmt.Println("Job queued")
-        case tensorlake.sseEventParseUpdate:
+        case tensorlake.SSEEventParseUpdate:
             fmt.Printf("Progress: %d/%d pages\n", r.ParsedPagesCount, r.TotalPages)
-        case tensorlake.sseEventParseDone:
+        case tensorlake.SSEEventParseDone:
             fmt.Println("Complete!")
+        case tensorlake.SSEEventParseFailed:
+            fmt.Printf("Failed: %s\n", r.Error)
         }
     }),
 )
@@ -211,7 +213,7 @@ Easily iterate through paginated results:
 
 ```go
 // Iterate all files
-for file, err := range c.IterFiles(ctx, 50, tensorlake.PaginationDirectionNext) {
+for file, err := range c.IterFiles(ctx, 50) {
     if err != nil {
         panic(err)
     }
@@ -219,7 +221,7 @@ for file, err := range c.IterFiles(ctx, 50, tensorlake.PaginationDirectionNext) 
 }
 
 // Iterate all parse jobs
-for job, err := range c.IterParseJobs(ctx, 50, tensorlake.PaginationDirectionNext) {
+for job, err := range c.IterParseJobs(ctx, 50) {
     if err != nil {
         panic(err)
     }
@@ -227,7 +229,7 @@ for job, err := range c.IterParseJobs(ctx, 50, tensorlake.PaginationDirectionNex
 }
 
 // Iterate all datasets
-for dataset, err := range c.IterDatasets(ctx, 50, tensorlake.PaginationDirectionNext) {
+for dataset, err := range c.IterDatasets(ctx, 50) {
     if err != nil {
         panic(err)
     }

@@ -103,10 +103,10 @@ type ParseEventName string
 // The possible SSE events.
 // See also: https://github.com/tensorlakeai/tensorlake/blob/main/src/tensorlake/documentai/_parse.py#L499
 const (
-	sseEventParseQueued ParseEventName = "parse_queued"
-	sseEventParseUpdate ParseEventName = "parse_update"
-	sseEventParseDone   ParseEventName = "parse_done"
-	sseEventParseFailed ParseEventName = "parse_failed"
+	SSEEventParseQueued ParseEventName = "parse_queued"
+	SSEEventParseUpdate ParseEventName = "parse_update"
+	SSEEventParseDone   ParseEventName = "parse_done"
+	SSEEventParseFailed ParseEventName = "parse_failed"
 )
 
 func (c *Client) handleSSEResponse(req *http.Request, onUpdate ParseResultUpdateFunc) (*ParseResult, error) {
@@ -151,19 +151,19 @@ func (c *Client) handleSSEResponse(req *http.Request, onUpdate ParseResultUpdate
 		}
 
 		switch ev.Name() {
-		case string(sseEventParseQueued), string(sseEventParseUpdate):
+		case string(SSEEventParseQueued), string(SSEEventParseUpdate):
 			if onUpdate != nil {
 				onUpdate(ParseEventName(ev.Name()), &result)
 			}
 			continue
 
-		case string(sseEventParseDone):
+		case string(SSEEventParseDone):
 			if onUpdate != nil {
 				onUpdate(ParseEventName(ev.Name()), &result)
 			}
 			return &result, nil
 
-		case string(sseEventParseFailed):
+		case string(SSEEventParseFailed):
 			if onUpdate != nil {
 				onUpdate(ParseEventName(ev.Name()), &result)
 			}

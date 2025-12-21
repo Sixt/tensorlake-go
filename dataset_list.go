@@ -25,14 +25,14 @@ import (
 )
 
 // IterDatasets iterates over all datasets in the organization.
-func (c *Client) IterDatasets(ctx context.Context, limit int, direction PaginationDirection) iter.Seq2[Dataset, error] {
+func (c *Client) IterDatasets(ctx context.Context, batchSize int) iter.Seq2[Dataset, error] {
 	return func(yield func(Dataset, error) bool) {
 		cursor := ""
 		for {
 			listResp, err := c.ListDatasets(ctx, &ListDatasetsRequest{
 				Cursor:    cursor,
-				Limit:     limit,
-				Direction: direction,
+				Limit:     batchSize,
+				Direction: PaginationDirectionNext,
 			})
 			if err != nil {
 				yield(Dataset{}, err)
@@ -52,14 +52,15 @@ func (c *Client) IterDatasets(ctx context.Context, limit int, direction Paginati
 }
 
 // IterDatasetData iterates over all dataset data in the organization.
-func (c *Client) IterDatasetData(ctx context.Context, limit int, direction PaginationDirection) iter.Seq2[ParseResult, error] {
+func (c *Client) IterDatasetData(ctx context.Context, datasetId string, batchSize int) iter.Seq2[ParseResult, error] {
 	return func(yield func(ParseResult, error) bool) {
 		cursor := ""
 		for {
 			listResp, err := c.ListDatasetData(ctx, &ListDatasetDataRequest{
+				DatasetId: datasetId,
 				Cursor:    cursor,
-				Limit:     limit,
-				Direction: direction,
+				Limit:     batchSize,
+				Direction: PaginationDirectionNext,
 			})
 			if err != nil {
 				yield(ParseResult{}, err)

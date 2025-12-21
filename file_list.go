@@ -25,14 +25,14 @@ import (
 )
 
 // IterFiles iterates over all files in the project.
-func (c *Client) IterFiles(ctx context.Context, limit int, direction PaginationDirection) iter.Seq2[FileInfo, error] {
+func (c *Client) IterFiles(ctx context.Context, batchSize int) iter.Seq2[FileInfo, error] {
 	return func(yield func(FileInfo, error) bool) {
 		cursor := ""
 		for {
 			listResp, err := c.ListFiles(ctx, &ListFilesRequest{
 				Cursor:    cursor,
-				Limit:     limit,
-				Direction: direction,
+				Limit:     batchSize,
+				Direction: PaginationDirectionNext,
 			})
 			if err != nil {
 				yield(FileInfo{}, err)
