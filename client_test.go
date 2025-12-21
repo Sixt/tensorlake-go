@@ -94,7 +94,7 @@ func TestNewClient(t *testing.T) {
 func initializeTestClient(t *testing.T) *Client {
 	base := os.Getenv("TENSORLAKE_BASE_URL")
 	apiKey := os.Getenv("TENSORLAKE_API_KEY")
-	region := RegionOnPrem
+	region := RegionUS
 	if base == "" || apiKey == "" {
 		t.Skip("TENSORLAKE_BASE_URL and TENSORLAKE_API_KEY must be set")
 	}
