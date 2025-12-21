@@ -79,7 +79,13 @@ func TestFileManagement(t *testing.T) {
 			t.Log("upload file done, begin listing files...")
 
 			// List the files. Iterate through all the pages.
-			files := fetchAllFiles(t, c)
+			files := []string{}
+			for f, err := range c.IterFiles(t.Context(), 1, PaginationDirectionNext) {
+				if err != nil {
+					t.Fatalf("failed to list files: %v", err)
+				}
+				files = append(files, f.FileId)
+			}
 			t.Logf("listed %d files: %v", len(files), files)
 
 			if !slices.Contains(files, resp.FileId) {
@@ -117,7 +123,14 @@ func TestFileManagement(t *testing.T) {
 			}
 
 			// Validate file is deleted.
-			files = fetchAllFiles(t, c)
+			files = []string{}
+			for f, err := range c.IterFiles(t.Context(), 1, PaginationDirectionNext) {
+				if err != nil {
+					t.Fatalf("failed to list files: %v", err)
+				}
+				files = append(files, f.FileId)
+			}
+			t.Logf("listed %d files: %v", len(files), files)
 			if slices.Contains(files, resp.FileId) {
 				t.Fatalf("file %s is not deleted", resp.FileId)
 			}

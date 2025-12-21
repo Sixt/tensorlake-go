@@ -75,8 +75,14 @@ func TestParseDocumentRemote(t *testing.T) {
 				t.Logf("parse result: %+v", peak)
 
 				// Validate parse results.
-				jobs := fetchAllParseJobs(t, c)
-				t.Logf("parse jobs: %v", jobs)
+				jobs := []string{}
+				for j, err := range c.IterParseJobs(t.Context(), 1, PaginationDirectionNext) {
+					if err != nil {
+						t.Fatalf("failed to list parse jobs: %v", err)
+					}
+					jobs = append(jobs, j.ParseId)
+				}
+				t.Logf("listed %d parse jobs: %v", len(jobs), jobs)
 				if !slices.Contains(jobs, r.ParseId) {
 					t.Fatalf("parse job is not found in list: %v", jobs)
 				}
@@ -205,8 +211,14 @@ func TestParseDocumentStructuredExtraction(t *testing.T) {
 				t.Logf("parse result: %+v", peak)
 
 				// Validate parse results.
-				jobs := fetchAllParseJobs(t, c)
-				t.Logf("parse jobs: %v", jobs)
+				jobs := []string{}
+				for j, err := range c.IterParseJobs(t.Context(), 1, PaginationDirectionNext) {
+					if err != nil {
+						t.Fatalf("failed to list parse jobs: %v", err)
+					}
+					jobs = append(jobs, j.ParseId)
+				}
+				t.Logf("listed %d parse jobs: %v", len(jobs), jobs)
 				if !slices.Contains(jobs, r.ParseId) {
 					t.Fatalf("parse job is not found in list: %v", jobs)
 				}

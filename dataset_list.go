@@ -19,9 +19,64 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"iter"
 	"net/http"
 	"net/url"
 )
+
+// IterDatasets iterates over all datasets in the organization.
+func (c *Client) IterDatasets(ctx context.Context, limit int, direction PaginationDirection) iter.Seq2[Dataset, error] {
+	return func(yield func(Dataset, error) bool) {
+		cursor := ""
+		for {
+			listResp, err := c.ListDatasets(ctx, &ListDatasetsRequest{
+				Cursor:    cursor,
+				Limit:     limit,
+				Direction: direction,
+			})
+			if err != nil {
+				yield(Dataset{}, err)
+				return
+			}
+			for _, dataset := range listResp.Items {
+				if !yield(dataset, nil) {
+					return
+				}
+			}
+			cursor = listResp.NextCursor
+			if !listResp.HasMore {
+				return
+			}
+		}
+	}
+}
+
+// IterDatasetData iterates over all dataset data in the organization.
+func (c *Client) IterDatasetData(ctx context.Context, limit int, direction PaginationDirection) iter.Seq2[ParseResult, error] {
+	return func(yield func(ParseResult, error) bool) {
+		cursor := ""
+		for {
+			listResp, err := c.ListDatasetData(ctx, &ListDatasetDataRequest{
+				Cursor:    cursor,
+				Limit:     limit,
+				Direction: direction,
+			})
+			if err != nil {
+				yield(ParseResult{}, err)
+				return
+			}
+			for _, datasetData := range listResp.Items {
+				if !yield(datasetData, nil) {
+					return
+				}
+			}
+			cursor = listResp.NextCursor
+			if !listResp.HasMore {
+				return
+			}
+		}
+	}
+}
 
 // ListDatasetsRequest holds options for listing datasets.
 type ListDatasetsRequest struct {

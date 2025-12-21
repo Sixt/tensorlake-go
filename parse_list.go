@@ -19,9 +19,37 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"iter"
 	"net/http"
 	"net/url"
 )
+
+// IterParseJobs iterates over all parse jobs in the project.
+func (c *Client) IterParseJobs(ctx context.Context, limit int, direction PaginationDirection) iter.Seq2[ParseResult, error] {
+	return func(yield func(ParseResult, error) bool) {
+		cursor := ""
+		for {
+			listResp, err := c.ListParseJobs(ctx, &ListParseJobsRequest{
+				Cursor:    cursor,
+				Limit:     limit,
+				Direction: direction,
+			})
+			if err != nil {
+				yield(ParseResult{}, err)
+				return
+			}
+			for _, parseJob := range listResp.Items {
+				if !yield(parseJob, nil) {
+					return
+				}
+			}
+			cursor = listResp.NextCursor
+			if !listResp.HasMore {
+				return
+			}
+		}
+	}
+}
 
 type ListParseJobsRequest struct {
 	Cursor         string              `json:"cursor,omitempty"`
