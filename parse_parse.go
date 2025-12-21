@@ -77,22 +77,8 @@ type ParseDocumentRequest struct {
 	MimeType MimeType `json:"mime_type,omitempty"`
 }
 
-// ParseDocumentResponse represents the response from the ParseDocument operation.
-//
-// ParseId is the unique identifier for the parse job.
-// CreatedAt is the creation date and time of the parse job.
-type ParseDocumentResponse struct {
-	// ParseId is the unique identifier for the parse job.
-	// This is the ID that can be used to track the status of the parse job.
-	// Used in the GET /documents/v2/parse/{parse_id} endpoint to retrieve
-	// the status and results of the parse job.
-	ParseId string `json:"parse_id"`
-	// CreatedAt is the creation date and time of the parse job.
-	CreatedAt string `json:"created_at"`
-}
-
 // ParseDocument submits a document for comprehensive parsing (read, extract, and classify).
-func (c *Client) ParseDocument(ctx context.Context, in *ParseDocumentRequest) (*ParseDocumentResponse, error) {
+func (c *Client) ParseDocument(ctx context.Context, in *ParseDocumentRequest) (*ParseJob, error) {
 	if !in.SourceProvided() {
 		return nil, fmt.Errorf("exactly one of file_id, file_url, or raw_text must be provided")
 	}
@@ -106,8 +92,8 @@ func (c *Client) ParseDocument(ctx context.Context, in *ParseDocumentRequest) (*
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
-	return do(c, req, func(r io.Reader) (*ParseDocumentResponse, error) {
-		var result ParseDocumentResponse
+	return do(c, req, func(r io.Reader) (*ParseJob, error) {
+		var result ParseJob
 		if err := json.NewDecoder(r).Decode(&result); err != nil {
 			return nil, fmt.Errorf("failed to decode response: %w", err)
 		}

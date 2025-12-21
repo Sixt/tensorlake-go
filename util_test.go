@@ -95,3 +95,27 @@ func fetchAllParseJobs(t *testing.T, c *Client) []string {
 	}
 	return jobs
 }
+
+func fetchAllDatasets(t *testing.T, c *Client) []string {
+	datasets, cursor := []string{}, ""
+	for {
+		listResp, err := c.ListDatasets(t.Context(), &ListDatasetsRequest{
+			Cursor:    cursor,
+			Limit:     1,
+			Direction: PaginationDirectionNext,
+		})
+		if err != nil {
+			t.Fatalf("failed to list datasets: %v", err)
+		}
+		if len(listResp.Items) == 0 {
+			break
+		}
+		datasets = append(datasets, listResp.Items[0].DatasetId)
+		cursor = listResp.NextCursor
+
+		if !listResp.HasMore {
+			break
+		}
+	}
+	return datasets
+}

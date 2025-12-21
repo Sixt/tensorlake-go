@@ -240,3 +240,10 @@ const (
 	PaginationDirectionNext PaginationDirection = "next"
 	PaginationDirectionPrev PaginationDirection = "prev"
 )
+
+type DatasetStatus string
+
+const (
+	DatasetStatusIdle       DatasetStatus = "idle"
+	DatasetStatusProcessing DatasetStatus = "processing"
+)

@@ -63,17 +63,6 @@ type ReadDocumentRequest struct {
 	MimeType MimeType `json:"mime_type,omitempty"`
 }
 
-type ReadDocumentResponse struct {
-	// ParseId is the unique identifier for the parse job.
-	// This is the ID that can be used to track the status of the parse job.
-	// Used in the GET /documents/v2/parse/{parse_id} endpoint to retrieve
-	// the status and results of the parse job.
-	ParseId string `json:"parse_id"`
-	// CreatedAt is the creation date and time of the parse job.
-	// The date is in RFC 3339 format.
-	CreatedAt string `json:"created_at"`
-}
-
 // ReadDocument submits an uploaded file, an internet-reachable URL, or
 // any kind of raw text for document parsing. If you have configured a
 // webhook, we will notify you when the job is complete, be it a success
@@ -81,7 +70,7 @@ type ReadDocumentResponse struct {
 // provide document layout information. Once submitted, the API will
 // return a parse response with a parse_id field. You can query the status
 // and results of the parse operation with the Get Parse Result endpoint.
-func (c *Client) ReadDocument(ctx context.Context, in *ReadDocumentRequest) (*ReadDocumentResponse, error) {
+func (c *Client) ReadDocument(ctx context.Context, in *ReadDocumentRequest) (*ParseJob, error) {
 	if !in.SourceProvided() {
 		return nil, fmt.Errorf("exactly one of file_id, file_url, or raw_text must be provided")
 	}
@@ -89,14 +78,18 @@ func (c *Client) ReadDocument(ctx context.Context, in *ReadDocumentRequest) (*Re
 		in.FileName = "" // FileName is only populated when using file_id.
 	}
 
-	body, _ := json.Marshal(in)
+	body, err := json.Marshal(in)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal request: %w", err)
+	}
+
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/read", bytes.NewReader(body))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
-	return do(c, req, func(r io.Reader) (*ReadDocumentResponse, error) {
-		var result ReadDocumentResponse
+	return do(c, req, func(r io.Reader) (*ParseJob, error) {
+		var result ParseJob
 		if err := json.NewDecoder(r).Decode(&result); err != nil {
 			return nil, fmt.Errorf("failed to decode response: %w", err)
 		}

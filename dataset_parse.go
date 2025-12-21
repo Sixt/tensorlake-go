@@ -23,31 +23,25 @@ import (
 	"net/http"
 )
 
-// ExtractDocumentRequest holds options for extracting structured data from a document.
-type ExtractDocumentRequest struct {
+// ParseDatasetRequest holds options for parsing a document with a dataset.
+type ParseDatasetRequest struct {
+	DatasetId string `json:"-"`
 	FileSource
-
-	StructuredExtractionOptions []StructuredExtractionOptions `json:"structured_extraction_options"`
-	PageRange                   string                        `json:"page_range,omitempty"`
-	MimeType                    string                        `json:"mime_type,omitempty"`
-	Labels                      map[string]string             `json:"labels,omitempty"`
+	PageRange string            `json:"page_range,omitempty"`
+	FileName  string            `json:"file_name,omitempty"`
+	MimeType  MimeType          `json:"mime_type,omitempty"`
+	Labels    map[string]string `json:"labels,omitempty"`
 }
 
-// ExtractDocument submits a document for structured data extraction.
-func (c *Client) ExtractDocument(ctx context.Context, in *ExtractDocumentRequest) (*ParseJob, error) {
-	// Validate that exactly one source is provided
+// ParseDataset parses a document using a dataset's configuration.
+func (c *Client) ParseDataset(ctx context.Context, in *ParseDatasetRequest) (*ParseJob, error) {
 	if !in.SourceProvided() {
 		return nil, fmt.Errorf("exactly one of file_id, file_url, or raw_text must be provided")
 	}
-	if len(in.StructuredExtractionOptions) == 0 {
-		return nil, fmt.Errorf("at least one structured_extraction_options must be provided")
-	}
 
-	body, err := json.Marshal(in)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal request: %w", err)
-	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/extract", bytes.NewReader(body))
+	r, _ := json.Marshal(in)
+	reqURL := fmt.Sprintf("%s/datasets/%s/parse", c.baseURL, in.DatasetId)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, reqURL, bytes.NewReader(r))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
