@@ -27,7 +27,7 @@ import (
 
 // ParseResultUpdateFunc is a callback function that receives intermediate parse result updates
 // during SSE streaming. It will be called for each SSE event received.
-type ParseResultUpdateFunc func(eventName string, result *ParseResult)
+type ParseResultUpdateFunc func(name ParseEventName, result *ParseResult)
 
 type GetParseResultOptions struct {
 	// UseSSE enables Server-Sent Events (SSE) for streaming updates.
@@ -64,6 +64,10 @@ func WithOnUpdate(onUpdate ParseResultUpdateFunc) GetParseResultOption {
 // When the job finishes successfully, the response will contain pages
 // (chunks of the page) chunks (text chunks extracted from the document),
 // structured data (every schema_name provided in the parse request as a key).
+//
+// See also: [Get Parse Result API Reference]
+//
+// [Get Parse Result API Reference]: https://docs.tensorlake.ai/api-reference/v2/parse/get
 func (c *Client) GetParseResult(ctx context.Context, parseId string, opts ...GetParseResultOption) (*ParseResult, error) {
 	o := &GetParseResultOptions{
 		useSSE:   false,
@@ -93,13 +97,16 @@ func (c *Client) GetParseResult(ctx context.Context, parseId string, opts ...Get
 	})
 }
 
+// ParseEventName is the name of the SSE event.
+type ParseEventName string
+
 // The possible SSE events.
 // See also: https://github.com/tensorlakeai/tensorlake/blob/main/src/tensorlake/documentai/_parse.py#L499
 const (
-	sseEventParseQueued = "parse_queued"
-	sseEventParseUpdate = "parse_update"
-	sseEventParseDone   = "parse_done"
-	sseEventParseFailed = "parse_failed"
+	sseEventParseQueued ParseEventName = "parse_queued"
+	sseEventParseUpdate ParseEventName = "parse_update"
+	sseEventParseDone   ParseEventName = "parse_done"
+	sseEventParseFailed ParseEventName = "parse_failed"
 )
 
 func (c *Client) handleSSEResponse(req *http.Request, onUpdate ParseResultUpdateFunc) (*ParseResult, error) {
@@ -144,21 +151,21 @@ func (c *Client) handleSSEResponse(req *http.Request, onUpdate ParseResultUpdate
 		}
 
 		switch ev.Name() {
-		case sseEventParseQueued, sseEventParseUpdate:
+		case string(sseEventParseQueued), string(sseEventParseUpdate):
 			if onUpdate != nil {
-				onUpdate(ev.Name(), &result)
+				onUpdate(ParseEventName(ev.Name()), &result)
 			}
 			continue
 
-		case sseEventParseDone:
+		case string(sseEventParseDone):
 			if onUpdate != nil {
-				onUpdate(ev.Name(), &result)
+				onUpdate(ParseEventName(ev.Name()), &result)
 			}
 			return &result, nil
 
-		case sseEventParseFailed:
+		case string(sseEventParseFailed):
 			if onUpdate != nil {
-				onUpdate(ev.Name(), &result)
+				onUpdate(ParseEventName(ev.Name()), &result)
 			}
 			return nil, fmt.Errorf("failed to parse result: %s", result.Error)
 		default:

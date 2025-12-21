@@ -70,6 +70,10 @@ type ReadDocumentRequest struct {
 // provide document layout information. Once submitted, the API will
 // return a parse response with a parse_id field. You can query the status
 // and results of the parse operation with the Get Parse Result endpoint.
+//
+// See also: [Read Document API Reference]
+//
+// [Read Document API Reference]: https://docs.tensorlake.ai/api-reference/v2/parse/read
 func (c *Client) ReadDocument(ctx context.Context, in *ReadDocumentRequest) (*ParseJob, error) {
 	if !in.SourceProvided() {
 		return nil, fmt.Errorf("exactly one of file_id, file_url, or raw_text must be provided")

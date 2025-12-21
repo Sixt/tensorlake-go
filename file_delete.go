@@ -22,6 +22,10 @@ import (
 )
 
 // DeleteFile deletes a file from Tensorlake Cloud.
+//
+// See also: [Delete File API Reference]
+//
+// [Delete File API Reference]: https://docs.tensorlake.ai/api-reference/v2/files/delete
 func (c *Client) DeleteFile(ctx context.Context, fileId string) error {
 	reqURL := fmt.Sprintf("%s/files/%s", c.baseURL, url.PathEscape(fileId))
 

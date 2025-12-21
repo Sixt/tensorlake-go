@@ -101,6 +101,10 @@ type ListFilesRequest struct {
 //   - HasMore: A boolean indicating whether there are more files available beyond the current page.
 //   - NextCursor: A base64-encoded cursor for the next page of results. If HasMore is false, this field will be null.
 //   - PrevCursor: A base64-encoded cursor for the previous page of results. If this is the first page, this field will be null.
+//
+// See also: [List Files API Reference]
+//
+// [List Files API Reference]: https://docs.tensorlake.ai/api-reference/v2/files/list
 func (c *Client) ListFiles(ctx context.Context, in *ListFilesRequest) (*PaginationResult[FileInfo], error) {
 	reqURL := fmt.Sprintf("%s/files", c.baseURL)
 	params := url.Values{}

@@ -88,6 +88,10 @@ type ListDatasetsRequest struct {
 }
 
 // ListDatasets lists all datasets in the organization.
+//
+// See also: [List Datasets API Reference]
+//
+// [List Datasets API Reference]: https://docs.tensorlake.ai/api-reference/v2/datasets/list
 func (c *Client) ListDatasets(ctx context.Context, in *ListDatasetsRequest) (*PaginationResult[Dataset], error) {
 	reqURL := c.baseURL + "/datasets"
 
@@ -148,6 +152,10 @@ type ListDatasetDataRequest struct {
 // ListDatasetData lists all the parse jobs associated with a specific dataset.
 // This endpoint allows you to retrieve the status and metadata of each parse job
 // that has been submitted under the specified dataset.
+//
+// See also: [List Dataset Data API Reference]
+//
+// [List Dataset Data API Reference]: https://docs.tensorlake.ai/api-reference/v2/datasets/data
 func (c *Client) ListDatasetData(ctx context.Context, in *ListDatasetDataRequest) (*PaginationResult[ParseResult], error) {
 	reqURL := fmt.Sprintf("%s/datasets/%s/data", c.baseURL, in.DatasetId)
 	params := url.Values{}

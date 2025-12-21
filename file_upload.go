@@ -85,6 +85,10 @@ type FileUploadResponse struct {
 // # Limits
 //
 // There is an upload limit of 1 GB per file.
+//
+// See also: [Upload File API Reference]
+//
+// [Upload File API Reference]: https://docs.tensorlake.ai/api-reference/v2/files/upload
 func (c *Client) UploadFile(ctx context.Context, in *UploadFileRequest) (*FileUploadResponse, error) {
 	if in.FileName == "" {
 		return nil, errors.New("file name is empty")

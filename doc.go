@@ -46,4 +46,35 @@
 //	if err != nil {
 //		log.Fatal(err)
 //	}
+//
+// # Parsing a Document
+//
+// Parse an uploaded file and retrieve the results:
+//
+//	// Start parsing using the file ID from upload
+//	parseJob, err := c.ParseDocument(context.Background(), &tensorlake.ParseDocumentRequest{
+//		FileSource: tensorlake.FileSource{
+//			FileId: r.FileId,
+//		},
+//		Labels: map[string]string{"type": "invoice"},
+//	})
+//	if err != nil {
+//		log.Fatal(err)
+//	}
+//
+//	// Retrieve parse results with streaming updates
+//	result, err := c.GetParseResult(context.Background(), parseJob.ParseId,
+//		tensorlake.WithSSE(true),
+//		tensorlake.WithOnUpdate(func(eventName string, r *tensorlake.ParseResult) {
+//			log.Printf("Parse status: %s", eventName)
+//		}),
+//	)
+//	if err != nil {
+//		log.Fatal(err)
+//	}
+//
+//	// Access the parsed content
+//	for _, page := range result.Pages {
+//		log.Printf("Page %d: %s", page.PageNumber, page.Markdown)
+//	}
 package tensorlake

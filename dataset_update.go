@@ -34,6 +34,10 @@ type UpdateDatasetRequest struct {
 }
 
 // UpdateDataset updates a dataset's settings.
+//
+// See also: [Update Dataset API Reference]
+//
+// [Update Dataset API Reference]: https://docs.tensorlake.ai/api-reference/v2/datasets/update
 func (c *Client) UpdateDataset(ctx context.Context, in *UpdateDatasetRequest) (*Dataset, error) {
 	reqBody, err := json.Marshal(in)
 	if err != nil {

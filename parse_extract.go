@@ -34,6 +34,10 @@ type ExtractDocumentRequest struct {
 }
 
 // ExtractDocument submits a document for structured data extraction.
+//
+// See also: [Extract Document API Reference]
+//
+// [Extract Document API Reference]: https://docs.tensorlake.ai/api-reference/v2/parse/extract
 func (c *Client) ExtractDocument(ctx context.Context, in *ExtractDocumentRequest) (*ParseJob, error) {
 	// Validate that exactly one source is provided
 	if !in.SourceProvided() {
