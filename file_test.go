@@ -79,10 +79,7 @@ func TestFileManagement(t *testing.T) {
 			t.Log("upload file done, begin listing files...")
 
 			// List the files. Iterate through all the pages.
-			files, err := fetchAllFiles(t, c)
-			if err != nil {
-				t.Fatalf("failed to list files: %v", err)
-			}
+			files := fetchAllFiles(t, c)
 			t.Logf("listed %d files: %v", len(files), files)
 
 			if !slices.Contains(files, resp.FileId) {
@@ -120,42 +117,12 @@ func TestFileManagement(t *testing.T) {
 			}
 
 			// Validate file is deleted.
-			files, err = fetchAllFiles(t, c)
-			if err != nil {
-				t.Fatalf("failed to list files: %v", err)
-			}
+			files = fetchAllFiles(t, c)
 			if slices.Contains(files, resp.FileId) {
 				t.Fatalf("file %s is not deleted", resp.FileId)
 			}
 		}()
 	}
-}
-
-func fetchAllFiles(t *testing.T, c *Client) ([]string, error) {
-	files, cursor := []string{}, ""
-	var err error
-	for {
-		var listResp *PaginationResult[FileInfo]
-		listResp, err = c.ListFiles(t.Context(), &ListFilesRequest{
-			Cursor:    cursor,
-			Limit:     1,
-			Direction: PaginationDirectionNext,
-		})
-		if err != nil {
-			t.Fatalf("failed to list files: %v", err)
-		}
-		if len(listResp.Items) == 0 {
-			break
-		}
-
-		files = append(files, listResp.Items[0].FileId)
-		cursor = listResp.NextCursor
-
-		if !listResp.HasMore {
-			break
-		}
-	}
-	return files, err
 }
 
 // TestUploadFileNoGoroutineLeak tests that the UploadFile function

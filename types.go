@@ -399,9 +399,15 @@ type PageClassConfig struct {
 // StructuredData objects containing the structured data extracted from
 // the document.
 type StructuredData struct {
-	Data        json.RawMessage  `json:"data"`
+	// Data is a JSON object containing the structured data extracted from the document.
+	// The schema is specified in the StructuredExtractionOptions.JSONSchema field.
+	Data json.RawMessage `json:"data"`
+	// PageNumber contains either an integer or an array of integers regarding page numbers.
+	// Example: [1, 2, 3] or 1
 	PageNumbers UnionValues[int] `json:"page_numbers"`
-	SchemaName  string           `json:"schema_name,omitempty"`
+	// SchemaName is the name of the schema used to extract the structured data.
+	// It is specified in the StructuredExtractionOptions.SchemaName field.
+	SchemaName string `json:"schema_name,omitempty"`
 }
 
 type PageFragmentContent struct {
