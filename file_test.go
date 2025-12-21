@@ -80,7 +80,7 @@ func TestFileManagement(t *testing.T) {
 
 			// List the files. Iterate through all the pages.
 			files := []string{}
-			for f, err := range c.IterFiles(t.Context(), 1, PaginationDirectionNext) {
+			for f, err := range c.IterFiles(t.Context(), 1) {
 				if err != nil {
 					t.Fatalf("failed to list files: %v", err)
 				}
@@ -124,7 +124,7 @@ func TestFileManagement(t *testing.T) {
 
 			// Validate file is deleted.
 			files = []string{}
-			for f, err := range c.IterFiles(t.Context(), 1, PaginationDirectionNext) {
+			for f, err := range c.IterFiles(t.Context(), 1) {
 				if err != nil {
 					t.Fatalf("failed to list files: %v", err)
 				}

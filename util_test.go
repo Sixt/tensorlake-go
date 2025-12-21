@@ -28,7 +28,7 @@ func testCleanupFileAndParseJob(t *testing.T, c *Client, fileId string, parseId 
 
 		// Check if file is deleted.
 		files := []string{}
-		for f, err := range c.IterFiles(t.Context(), 1, PaginationDirectionNext) {
+		for f, err := range c.IterFiles(t.Context(), 1) {
 			if err != nil {
 				t.Fatalf("failed to list files: %v", err)
 			}
@@ -48,7 +48,7 @@ func testCleanupFileAndParseJob(t *testing.T, c *Client, fileId string, parseId 
 
 		// Check if parse job is deleted.
 		jobs := []string{}
-		for j, err := range c.IterParseJobs(t.Context(), 1, PaginationDirectionNext) {
+		for j, err := range c.IterParseJobs(t.Context(), 1) {
 			if err != nil {
 				t.Fatalf("failed to list parse jobs: %v", err)
 			}

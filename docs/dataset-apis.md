@@ -285,13 +285,13 @@ if response.HasMore {
 For convenience, use the `IterDatasets` method:
 
 ```go
-func (c *Client) IterDatasets(ctx context.Context, limit int, direction PaginationDirection) iter.Seq2[Dataset, error]
+func (c *Client) IterDatasets(ctx context.Context, batchSize int) iter.Seq2[Dataset, error]
 ```
 
 **Example:**
 
 ```go
-for dataset, err := range client.IterDatasets(context.Background(), 50, tensorlake.PaginationDirectionNext) {
+for dataset, err := range client.IterDatasets(context.Background(), 50) {
     if err != nil {
         log.Fatal(err)
     }

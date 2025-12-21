@@ -175,13 +175,13 @@ if response.HasMore {
 For convenience, use the `IterFiles` method to iterate through all files:
 
 ```go
-func (c *Client) IterFiles(ctx context.Context, limit int, direction PaginationDirection) iter.Seq2[FileInfo, error]
+func (c *Client) IterFiles(ctx context.Context, batchSize int) iter.Seq2[FileInfo, error]
 ```
 
 **Example:**
 
 ```go
-for file, err := range client.IterFiles(context.Background(), 50, tensorlake.PaginationDirectionNext) {
+for file, err := range client.IterFiles(context.Background(), 50) {
     if err != nil {
         log.Fatal(err)
     }
