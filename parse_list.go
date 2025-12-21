@@ -1,0 +1,75 @@
+package tensorlake
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"net/url"
+)
+
+type ListParseJobsRequest struct {
+	Cursor         string              `json:"cursor,omitempty"`
+	Direction      PaginationDirection `json:"direction,omitempty"`
+	DatasetName    string              `json:"dataset_name,omitempty"`
+	Limit          int                 `json:"limit,omitempty"`
+	FileName       string              `json:"file_name,omitempty"`
+	Status         ParseStatus         `json:"status,omitempty"`
+	CreatedAfter   string              `json:"created_after,omitempty"`
+	CreatedBefore  string              `json:"created_before,omitempty"`
+	FinishedAfter  string              `json:"finished_after,omitempty"`
+	FinishedBefore string              `json:"finished_before,omitempty"`
+}
+
+// ListParseJobs lists parse jobs in the Tensorlake project.
+func (c *Client) ListParseJobs(ctx context.Context, in *ListParseJobsRequest) (*PaginationResult[ParseResult], error) {
+	reqURL := c.baseURL + "/parse"
+	params := url.Values{}
+	if in.Cursor != "" {
+		params.Add("cursor", in.Cursor)
+	}
+	if in.Direction != "" {
+		params.Add("direction", string(in.Direction))
+	}
+	if in.DatasetName != "" {
+		params.Add("dataset_name", in.DatasetName)
+	}
+	if in.Limit != 0 {
+		params.Add("limit", fmt.Sprintf("%d", in.Limit))
+	}
+	if in.FileName != "" {
+		params.Add("file_name", in.FileName)
+	}
+	if in.Status != "" {
+		params.Add("status", string(in.Status))
+	}
+	if in.CreatedAfter != "" {
+		params.Add("created_after", in.CreatedAfter)
+	}
+	if in.CreatedBefore != "" {
+		params.Add("created_before", in.CreatedBefore)
+	}
+	if in.FinishedAfter != "" {
+		params.Add("finished_after", in.FinishedAfter)
+	}
+	if in.FinishedBefore != "" {
+		params.Add("finished_before", in.FinishedBefore)
+	}
+	if len(params) > 0 {
+		reqURL += "?" + params.Encode()
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	return do(c, req, func(r io.Reader) (*PaginationResult[ParseResult], error) {
+		var result PaginationResult[ParseResult]
+		if err := json.NewDecoder(r).Decode(&result); err != nil {
+			return nil, fmt.Errorf("failed to decode response: %w", err)
+		}
+		return &result, nil
+	})
+}

@@ -22,6 +22,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"testing"
 	"time"
 )
@@ -84,14 +85,7 @@ func TestFileManagement(t *testing.T) {
 			}
 			t.Logf("listed %d files: %v", len(files), files)
 
-			found := false
-			for _, file := range files {
-				if file == resp.FileId {
-					found = true
-					break
-				}
-			}
-			if !found {
+			if !slices.Contains(files, resp.FileId) {
 				t.Fatalf("file %s not found in list", resp.FileId)
 			}
 
@@ -130,14 +124,7 @@ func TestFileManagement(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to list files: %v", err)
 			}
-			found = false
-			for _, file := range files {
-				if file == resp.FileId {
-					found = true
-					break
-				}
-			}
-			if found {
+			if slices.Contains(files, resp.FileId) {
 				t.Fatalf("file %s is not deleted", resp.FileId)
 			}
 		}()
