@@ -15,7 +15,6 @@
 package tensorlake
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
@@ -96,28 +95,13 @@ func TestParseDocumentRemote(t *testing.T) {
 				t.Logf("parse result: %+v", peak)
 
 				// Validate parse results.
-				jobs, err := fetchAllParseJobs(t, c)
-				if err != nil {
-					t.Fatalf("failed to list parse jobs: %v", err)
-				}
+				jobs := fetchAllParseJobs(t, c)
 				t.Logf("parse jobs: %v", jobs)
 				if !slices.Contains(jobs, r.ParseId) {
 					t.Fatalf("parse job is not found in list: %v", jobs)
 				}
 
-				// Delete parse job.
-				if err := c.DeleteParseJob(t.Context(), r.ParseId); err != nil {
-					t.Fatalf("failed to delete parse job: %v", err)
-				}
-
-				// Check if parse job is deleted.
-				jobs, err = fetchAllParseJobs(t, c)
-				if err != nil {
-					t.Fatalf("failed to list parse jobs: %v", err)
-				}
-				if slices.Contains(jobs, r.ParseId) {
-					t.Fatalf("parse job is not deleted and found in list: %v", jobs)
-				}
+				testCleanupFileAndParseJob(t, c, "", r.ParseId)
 			}()
 		})
 	}
@@ -260,69 +244,14 @@ func TestParseDocumentStructuredExtraction(t *testing.T) {
 				t.Logf("parse result: %+v", peak)
 
 				// Validate parse results.
-				jobs, err := fetchAllParseJobs(t, c)
-				if err != nil {
-					t.Fatalf("failed to list parse jobs: %v", err)
-				}
+				jobs := fetchAllParseJobs(t, c)
 				t.Logf("parse jobs: %v", jobs)
 				if !slices.Contains(jobs, r.ParseId) {
 					t.Fatalf("parse job is not found in list: %v", jobs)
 				}
 
-				// Delete file.
-				if err := c.DeleteFile(t.Context(), resp.FileId); err != nil {
-					t.Fatalf("failed to delete file: %v", err)
-				}
-
-				// Delete parse job.
-				if err := c.DeleteParseJob(t.Context(), r.ParseId); err != nil {
-					t.Fatalf("failed to delete parse job: %v", err)
-				}
-
-				// Check if file is deleted.
-				files, err := fetchAllFiles(t, c)
-				if err != nil {
-					t.Fatalf("failed to list files: %v", err)
-				}
-				if slices.Contains(files, resp.FileId) {
-					t.Fatalf("file is not deleted and found in list: %v", files)
-				}
-
-				// Check if parse job is deleted.
-				jobs, err = fetchAllParseJobs(t, c)
-				if err != nil {
-					t.Fatalf("failed to list parse jobs: %v", err)
-				}
-				if slices.Contains(jobs, r.ParseId) {
-					t.Fatalf("parse job is not deleted and found in list: %v", jobs)
-				}
+				testCleanupFileAndParseJob(t, c, resp.FileId, r.ParseId)
 			}()
 		})
 	}
-}
-
-func fetchAllParseJobs(t *testing.T, c *Client) ([]string, error) {
-	jobs, cursor := []string{}, ""
-	var err error
-	for {
-		var listResp *PaginationResult[ParseResult]
-		listResp, err = c.ListParseJobs(t.Context(), &ListParseJobsRequest{
-			Cursor:    cursor,
-			Limit:     1,
-			Direction: PaginationDirectionNext,
-		})
-		if err != nil {
-			return nil, fmt.Errorf("failed to list parse jobs: %v", err)
-		}
-		if len(listResp.Items) == 0 {
-			break
-		}
-		jobs = append(jobs, listResp.Items[0].ParseId)
-		cursor = listResp.NextCursor
-
-		if !listResp.HasMore {
-			break
-		}
-	}
-	return jobs, err
 }
