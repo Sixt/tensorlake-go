@@ -154,6 +154,17 @@ type EnrichmentOptions struct {
 	IncludeFullPageImage bool `json:"include_full_page_image,omitempty"`
 }
 
+// ParseJob represents a parse job.
+type ParseJob struct {
+	// ParseId is the unique identifier for the parse job.
+	// This is the ID that can be used to track the status of the parse job.
+	// Used in the GET /documents/v2/parse/{parse_id} endpoint to retrieve
+	// the status and results of the parse job.
+	ParseId string `json:"parse_id"`
+	// CreatedAt is the creation date and time of the parse job.
+	CreatedAt string `json:"created_at"`
+}
+
 // ParseResult represents the result of a parse job.
 type ParseResult struct {
 	//
@@ -447,4 +458,14 @@ type PageFragmentFigure struct {
 
 type PageFragmentSignature struct {
 	Content string `json:"content"`
+}
+
+// Dataset represents a dataset.
+type Dataset struct {
+	Name        string        `json:"name"`
+	DatasetId   string        `json:"dataset_id"`
+	Description string        `json:"description,omitempty"`
+	Status      DatasetStatus `json:"status"`
+	CreatedAt   string        `json:"created_at"`
+	UpdatedAt   string        `json:"updated_at"`
 }

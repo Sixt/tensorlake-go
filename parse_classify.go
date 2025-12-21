@@ -32,14 +32,8 @@ type ClassifyDocumentRequest struct {
 	Labels              map[string]string `json:"labels,omitempty"`
 }
 
-// ClassifyDocumentResponse represents the response from classifying a document.
-type ClassifyDocumentResponse struct {
-	ParseId   string `json:"parse_id"`
-	CreatedAt string `json:"created_at"`
-}
-
 // ClassifyDocument submits a document for page classification.
-func (c *Client) ClassifyDocument(ctx context.Context, in *ClassifyDocumentRequest) (*ClassifyDocumentResponse, error) {
+func (c *Client) ClassifyDocument(ctx context.Context, in *ClassifyDocumentRequest) (*ParseJob, error) {
 	if !in.SourceProvided() {
 		return nil, fmt.Errorf("exactly one of file_id, file_url, or raw_text must be provided")
 	}
@@ -57,8 +51,8 @@ func (c *Client) ClassifyDocument(ctx context.Context, in *ClassifyDocumentReque
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
-	return do(c, req, func(r io.Reader) (*ClassifyDocumentResponse, error) {
-		var result ClassifyDocumentResponse
+	return do(c, req, func(r io.Reader) (*ParseJob, error) {
+		var result ParseJob
 		if err := json.NewDecoder(r).Decode(&result); err != nil {
 			return nil, fmt.Errorf("failed to decode response: %w", err)
 		}
