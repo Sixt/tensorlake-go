@@ -19,7 +19,6 @@ import (
 	"path/filepath"
 	"slices"
 	"testing"
-	"time"
 
 	"github.com/google/jsonschema-go/jsonschema"
 )
@@ -60,30 +59,11 @@ func TestParseDocumentRemote(t *testing.T) {
 
 				// Read document status.
 
-				var success bool
-				var latestStatus ParseStatus
-				var result *ParseResult
-			pollLoop:
-				for range 10 {
-					result, err = c.GetParseResult(t.Context(), r.ParseId)
-					if err != nil {
-						t.Fatalf("failed to get parse result: %v", err)
-					}
-					latestStatus = result.Status
-
-					switch latestStatus {
-					case ParseStatusSuccessful:
-						success = true
-						break pollLoop
-					case ParseStatusFailure:
-						t.Fatalf("Parse failed")
-					default:
-						t.Logf("Parse status: %s, retrying...", latestStatus)
-					}
-					time.Sleep(2 * time.Second)
-				}
-				if !success {
-					t.Fatalf("parse still on going... status (%s)", string(latestStatus))
+				result, err := c.GetParseResult(t.Context(), r.ParseId, WithSSE(true), WithOnUpdate(func(eventName string, _ *ParseResult) {
+					t.Logf("parse status: %s", eventName)
+				}))
+				if err != nil {
+					t.Fatalf("failed to get parse result: %v", err)
 				}
 				if len(result.Chunks) == 0 {
 					t.Fatalf("no chunks found")
@@ -209,30 +189,11 @@ func TestParseDocumentStructuredExtraction(t *testing.T) {
 				t.Logf("parse document done, parse ID: %s", r.ParseId)
 
 				// Get parse result.
-				var success bool
-				var latestStatus ParseStatus
-				var result *ParseResult
-			pollLoop:
-				for range 10 {
-					result, err = c.GetParseResult(t.Context(), r.ParseId)
-					if err != nil {
-						t.Fatalf("failed to get parse result: %v", err)
-					}
-					latestStatus = result.Status
-
-					switch latestStatus {
-					case ParseStatusSuccessful:
-						success = true
-						break pollLoop
-					case ParseStatusFailure:
-						t.Fatalf("Parse failed: %s", result.Error)
-					default:
-						t.Logf("Parse status: %s, retrying...", latestStatus)
-					}
-					time.Sleep(2 * time.Second)
-				}
-				if !success {
-					t.Fatalf("parse still on going... status (%s)", string(latestStatus))
+				result, err := c.GetParseResult(t.Context(), r.ParseId, WithSSE(true), WithOnUpdate(func(eventName string, _ *ParseResult) {
+					t.Logf("parse status: %s", eventName)
+				}))
+				if err != nil {
+					t.Fatalf("failed to get parse result: %v", err)
 				}
 				if len(result.Chunks) == 0 {
 					t.Fatalf("no chunks found")

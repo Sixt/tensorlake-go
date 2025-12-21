@@ -19,7 +19,6 @@ import (
 	"path/filepath"
 	"slices"
 	"testing"
-	"time"
 )
 
 func TestClassifyDocument(t *testing.T) {
@@ -86,30 +85,14 @@ func TestClassifyDocument(t *testing.T) {
 				t.Logf("classify document done, parse ID: %s", r.ParseId)
 
 				// Get parse result.
-				var success bool
-				var latestStatus ParseStatus
-				var result *ParseResult
-			pollLoop:
-				for range 10 {
-					result, err = c.GetParseResult(t.Context(), r.ParseId)
-					if err != nil {
-						t.Fatalf("failed to get parse result: %v", err)
-					}
-					latestStatus = result.Status
-
-					switch latestStatus {
-					case ParseStatusSuccessful:
-						success = true
-						break pollLoop
-					case ParseStatusFailure:
-						t.Fatalf("Parse failed: %s", result.Error)
-					default:
-						t.Logf("Parse status: %s, retrying...", latestStatus)
-					}
-					time.Sleep(2 * time.Second)
+				result, err := c.GetParseResult(t.Context(), r.ParseId, WithSSE(true), WithOnUpdate(func(eventName string, _ *ParseResult) {
+					t.Logf("parse status: %s", eventName)
+				}))
+				if err != nil {
+					t.Fatalf("failed to get parse result: %v", err)
 				}
-				if !success {
-					t.Fatalf("parse still on going... status (%s)", string(latestStatus))
+				if result == nil {
+					t.Fatal("response is nil")
 				}
 				if len(result.PageClasses) == 0 {
 					t.Fatalf("no page classes found")

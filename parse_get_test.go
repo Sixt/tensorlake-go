@@ -15,17 +15,18 @@
 package tensorlake
 
 import (
+	"slices"
 	"testing"
 )
 
-func TestReadDocument(t *testing.T) {
+func TestGetParseResultSSE(t *testing.T) {
 	c := initializeTestClient(t)
 
 	tests := []struct {
-		req *ReadDocumentRequest
+		req *ParseDocumentRequest
 	}{
 		{
-			req: &ReadDocumentRequest{
+			req: &ParseDocumentRequest{
 				FileSource: FileSource{
 					FileURL: "https://www.sixt.de/shared/t-c/sixt_DE_de.pdf",
 				},
@@ -43,9 +44,9 @@ func TestReadDocument(t *testing.T) {
 		t.Run(tt.req.FileSource.FileURL, func(t *testing.T) {
 			func() {
 				// Trigger read document operation.
-				r, err := c.ReadDocument(t.Context(), tt.req)
+				r, err := c.ParseDocument(t.Context(), tt.req)
 				if err != nil {
-					t.Fatalf("failed to read document: %v", err)
+					t.Fatalf("failed to parse document: %v", err)
 				}
 				if r == nil {
 					t.Fatal("response is nil")
@@ -68,7 +69,13 @@ func TestReadDocument(t *testing.T) {
 				}
 				t.Logf("parse result: %+v", peak)
 
-				// Nothing to delete here.
+				// Validate parse results.
+				jobs := fetchAllParseJobs(t, c)
+				t.Logf("parse jobs: %v", jobs)
+				if !slices.Contains(jobs, r.ParseId) {
+					t.Fatalf("parse job is not found in list: %v", jobs)
+				}
+				testCleanupFileAndParseJob(t, c, "", r.ParseId)
 			}()
 		})
 	}
