@@ -23,7 +23,6 @@
 // Create a client with your API key:
 //
 //	c := tensorlake.NewClient(
-//		tensorlake.WithRegion(tensorlake.RegionOnPrem),
 //		tensorlake.WithBaseURL("https://api.your-domain.com"),
 //		tensorlake.WithAPIKey("your-api-key"),
 //	)

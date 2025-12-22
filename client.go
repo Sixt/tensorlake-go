@@ -28,7 +28,6 @@ type Client struct {
 
 	baseURL string
 	apiKey  string
-	region  Region
 }
 
 // Option defines a configuration option for the Client.
@@ -48,13 +47,6 @@ func WithAPIKey(key string) Option {
 	}
 }
 
-// WithRegion sets the region to use for the client.
-func WithRegion(region Region) Option {
-	return func(c *Client) {
-		c.region = region
-	}
-}
-
 // WithHTTPClient sets the HTTP client to use for the client.
 func WithHTTPClient(client *http.Client) Option {
 	return func(c *Client) {
@@ -66,21 +58,12 @@ func WithHTTPClient(client *http.Client) Option {
 func NewClient(opts ...Option) *Client {
 	client := &Client{
 		httpClient: http.DefaultClient,
-		region:     RegionEU,
-		baseURL:    "https://api.eu.tensorlake.ai/documents/v2",
+		baseURL:    EndpointEU,
 		apiKey:     os.Getenv("TENSORLAKE_API_KEY"),
 	}
 
 	for _, opt := range opts {
 		opt(client)
-	}
-
-	// For non on-premise regions, use the default base URL.
-	switch client.region {
-	case RegionEU:
-		client.baseURL = "https://api.eu.tensorlake.ai/documents/v2"
-	case RegionUS:
-		client.baseURL = "https://api.tensorlake.ai/documents/v2"
 	}
 	return client
 }
