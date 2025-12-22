@@ -270,6 +270,54 @@ type ParseResult struct {
 	// None - one structured data object for the entire document.
 	// Page - one structured data object for each page.
 	StructuredData []StructuredData `json:"structured_data,omitempty"`
+
+	// Options contains the options used for the parse job.
+	// Note that this field is no
+	Options *ParseResultOptions `json:"options,omitempty"`
+
+	// Resource usage associated with the parse job.
+	//
+	// This includes details such as number of pages parsed, tokens used for
+	// OCR and extraction, etc.
+	//
+	// Usage is only populated for successful jobs.
+	//
+	// Billing is based on the resource usage.
+	Usage Usage `json:"usage"`
+}
+
+// ParseResultOptions contains the options used for the parse job.
+// It includes the configuration options used for the parse job,
+// including the file ID, file URL, raw text, mime type,
+// and structured extraction options, etc.
+type ParseResultOptions struct {
+	FileSource
+	FileName      string            `json:"file_name"`
+	FileLabels    map[string]string `json:"file_labels"`
+	MimeType      MimeType          `json:"mime_type"`
+	TraceId       string            `json:"trace_id"`
+	PageRange     string            `json:"page_range"`
+	JobType       JobType           `json:"job_type"`
+	Configuration *ParsingOptions   `json:"configuration"`
+	Usage         *Usage            `json:"usage,omitempty"`
+	MessageUpdate string            `json:"message_update,omitempty"`
+}
+
+// Usage contains resource usage associated with the parse job.
+// This includes details such as number of pages parsed, tokens used for
+// OCR and extraction, etc.
+// Usage is only populated for successful jobs.
+// Billing is based on the resource usage.
+type Usage struct {
+	PagesParsed                  int `json:"pages_parsed"`
+	SignatureDetectedPages       int `json:"signature_detected_pages"`
+	StrikethroughDetectedPages   int `json:"strikethrough_detected_pages"`
+	OCRInputTokenUsed            int `json:"ocr_input_token_used"`
+	OCROutputTokenUsed           int `json:"ocr_output_token_used"`
+	ExtractionInputTokenUsed     int `json:"extraction_input_token_used"`
+	ExtractionOutputTokenUsed    int `json:"extraction_output_token_used"`
+	SummarizationInputTokenUsed  int `json:"summarization_input_token_used"`
+	SummarizationOutputTokenUsed int `json:"summarization_output_token_used"`
 }
 
 // StructuredExtractionOptions holds configuration for structured data extraction.

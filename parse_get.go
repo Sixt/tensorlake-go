@@ -30,6 +30,8 @@ import (
 type ParseResultUpdateFunc func(name ParseEventName, result *ParseResult)
 
 type GetParseResultOptions struct {
+	withOptions bool
+
 	// UseSSE enables Server-Sent Events (SSE) for streaming updates.
 	// See also: https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events/Using_server-sent_events
 	useSSE bool
@@ -40,6 +42,12 @@ type GetParseResultOptions struct {
 
 // GetParseResultOption is a function that configures the GetParseResultOptions.
 type GetParseResultOption func(*GetParseResultOptions)
+
+func WithOptions(enable bool) GetParseResultOption {
+	return func(opts *GetParseResultOptions) {
+		opts.withOptions = enable
+	}
+}
 
 // WithSSE enables Server-Sent Events (SSE) for streaming updates.
 func WithSSE(enable bool) GetParseResultOption {
@@ -70,14 +78,15 @@ func WithOnUpdate(onUpdate ParseResultUpdateFunc) GetParseResultOption {
 // [Get Parse Result API Reference]: https://docs.tensorlake.ai/api-reference/v2/parse/get
 func (c *Client) GetParseResult(ctx context.Context, parseId string, opts ...GetParseResultOption) (*ParseResult, error) {
 	o := &GetParseResultOptions{
-		useSSE:   false,
-		onUpdate: nil,
+		withOptions: false,
+		useSSE:      false,
+		onUpdate:    nil,
 	}
 	for _, opt := range opts {
 		opt(o)
 	}
 
-	reqURL := fmt.Sprintf("%s/parse/%s", c.baseURL, parseId)
+	reqURL := fmt.Sprintf("%s/parse/%s?with_options=%t", c.baseURL, parseId, o.withOptions)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
 	if err != nil {
