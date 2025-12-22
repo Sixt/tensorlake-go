@@ -30,7 +30,6 @@ go get github.com/sixt/tensorlake-go
 import "github.com/sixt/tensorlake-go"
 
 c := tensorlake.NewClient(
-    tensorlake.WithRegion(tensorlake.RegionOnPrem),
     tensorlake.WithBaseURL("https://api.your-domain.com"),
     tensorlake.WithAPIKey("your-api-key"),
 )
