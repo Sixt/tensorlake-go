@@ -14,15 +14,11 @@
 
 package tensorlake
 
-type Region string
-
 const (
-	// RegionEU is the European region.
-	RegionEU Region = "eu"
-	// RegionUS is the United States region.
-	RegionUS Region = "us"
-	// RegionOnPrem is the on-premise setup.
-	RegionOnPrem Region = "onprem"
+	// EndpointEU is the European endpoint.
+	EndpointEU string = "https://api.eu.tensorlake.ai/documents/v2"
+	// EndpointUS is the United States endpoint.
+	EndpointUS string = "https://api.tensorlake.ai/documents/v2"
 )
 
 // ChunkingStrategy determines how the document is chunked into smaller pieces.
@@ -246,4 +242,15 @@ type DatasetStatus string
 const (
 	DatasetStatusIdle       DatasetStatus = "idle"
 	DatasetStatusProcessing DatasetStatus = "processing"
+)
+
+type JobType string
+
+const (
+	JobTypeParse    JobType = "parse"
+	JobTypeRead     JobType = "read"
+	JobTypeExtract  JobType = "extract"
+	JobTypeClassify JobType = "classify"
+	JobTypeLegacy   JobType = "legacy"
+	JobTypeDataset  JobType = "dataset"
 )

@@ -58,32 +58,8 @@ func TestNewClient(t *testing.T) {
 		}
 	})
 
-	t.Run("with custom region", func(t *testing.T) {
-		client := NewClient(WithRegion(RegionUS))
-
-		if client == nil {
-			t.Fatal("NewClient returned nil")
-		}
-	})
-
 	t.Run("with custom API key", func(t *testing.T) {
 		client := NewClient(WithAPIKey("test-key"))
-
-		if client == nil {
-			t.Fatal("NewClient returned nil")
-		}
-	})
-
-	t.Run("with custom base URL and region", func(t *testing.T) {
-		client := NewClient(WithBaseURL("https://api.custom.com"), WithRegion(RegionUS))
-
-		if client == nil {
-			t.Fatal("NewClient returned nil")
-		}
-	})
-
-	t.Run("with on-premise region", func(t *testing.T) {
-		client := initializeTestClient(t)
 
 		if client == nil {
 			t.Fatal("NewClient returned nil")
@@ -94,10 +70,9 @@ func TestNewClient(t *testing.T) {
 func initializeTestClient(t *testing.T) *Client {
 	base := os.Getenv("TENSORLAKE_BASE_URL")
 	apiKey := os.Getenv("TENSORLAKE_API_KEY")
-	region := RegionUS
 	if base == "" || apiKey == "" {
 		t.Skip("TENSORLAKE_BASE_URL and TENSORLAKE_API_KEY must be set")
 	}
 
-	return NewClient(WithBaseURL(base), WithAPIKey(apiKey), WithRegion(region))
+	return NewClient(WithBaseURL(base), WithAPIKey(apiKey))
 }
