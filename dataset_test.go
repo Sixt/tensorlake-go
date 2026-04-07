@@ -15,16 +15,21 @@
 package tensorlake
 
 import (
+	"fmt"
 	"slices"
 	"testing"
+	"time"
 )
 
 func TestDataset(t *testing.T) {
 	c := initializeTestClient(t)
 
+	// Use a unique name to avoid ENTITY_ALREADY_EXISTS from leftover test data.
+	name := fmt.Sprintf("test_dataset_%d", time.Now().UnixNano())
+
 	// Create dataset.
 	ds, err := c.CreateDataset(t.Context(), &CreateDatasetRequest{
-		Name: "test_dataset",
+		Name: name,
 		ParsingOptions: &ParsingOptions{
 			ChunkingStrategy: ChunkingStrategyNone,
 		},
@@ -36,6 +41,11 @@ func TestDataset(t *testing.T) {
 		t.Fatalf("failed to create dataset: %v", err)
 	}
 	t.Logf("dataset created: %+v", ds)
+
+	// Ensure cleanup even if the test fails mid-way.
+	t.Cleanup(func() {
+		_ = c.DeleteDataset(t.Context(), ds.DatasetId)
+	})
 
 	// List datasets.
 	datasets := []string{}
