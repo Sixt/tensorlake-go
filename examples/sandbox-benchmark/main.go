@@ -22,11 +22,12 @@
 // Usage:
 //
 //	export TENSORLAKE_API_KEY=<your-api-key>
-//	go run ./examples/sandbox-benchmark 1 10 100
-//	go run ./examples/sandbox-benchmark -repeat 5 1 10 100 1000
+//	go run ./examples/sandbox-benchmark -con 1,10,100
+//	go run ./examples/sandbox-benchmark -repeat 5 -con 1,10,100,1000
 //
 // Flags:
 //
+//	-con       Comma-separated concurrency levels (default: 1,10,100)
 //	-repeat    Number of times to repeat each concurrency level (default: 1)
 //	-timeout   Sandbox timeout in seconds (default: 120)
 //	-poll      Poll interval for status checks (default: 100ms)
@@ -42,6 +43,7 @@ import (
 	"os/signal"
 	"slices"
 	"strconv"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -82,22 +84,22 @@ var pctDefs = []struct {
 }
 
 func main() {
+	con := flag.String("con", "1,10,100", "comma-separated concurrency levels")
 	repeat := flag.Int("repeat", 1, "number of times to repeat each concurrency level")
 	timeout := flag.Int64("timeout", 120, "sandbox timeout in seconds")
 	pollInterval := flag.Duration("poll", 100*time.Millisecond, "poll interval for status checks")
 	maxWait := flag.Duration("max-wait", 120*time.Second, "maximum wait time per sandbox")
 	flag.Parse()
 
-	args := flag.Args()
-	if len(args) == 0 {
-		args = []string{"1", "10", "100"}
-	}
-
 	var levels []int
-	for _, arg := range args {
-		n, err := strconv.Atoi(arg)
+	for _, part := range strings.Split(*con, ",") {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		n, err := strconv.Atoi(part)
 		if err != nil || n <= 0 {
-			fmt.Fprintf(os.Stderr, "invalid concurrency level: %q\n", arg)
+			fmt.Fprintf(os.Stderr, "invalid concurrency level: %q\n", part)
 			os.Exit(1)
 		}
 		levels = append(levels, n)
