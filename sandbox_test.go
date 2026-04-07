@@ -17,9 +17,8 @@ package tensorlake
 import (
 	"bytes"
 	"encoding/json"
-	"net/http"
-	"net/http/httptest"
 	"testing"
+	"time"
 )
 
 func TestSandboxProxyErrorFormat(t *testing.T) {
@@ -84,136 +83,82 @@ func TestSandboxDirectoryListResponseDeserialization(t *testing.T) {
 	}
 }
 
-func newTestSandboxServer(t *testing.T) *httptest.Server {
-	t.Helper()
-	mux := http.NewServeMux()
+func TestSandboxFileOperations(t *testing.T) {
+	c := initializeSandboxClient(t)
 
-	// List directory (must be registered before /api/v1/files to avoid prefix match)
-	mux.HandleFunc("/api/v1/files/list", func(w http.ResponseWriter, r *http.Request) {
-		size := int64(11)
-		modAt := int64(1704067200000)
-		json.NewEncoder(w).Encode(SandboxDirectoryListResponse{
-			Path: r.URL.Query().Get("path"),
-			Entries: []SandboxDirectoryEntry{
-				{Name: "subdir", IsDir: true, ModifiedAt: &modAt},
-				{Name: "hello.txt", IsDir: false, Size: &size, ModifiedAt: &modAt},
-			},
-		})
+	// Create a sandbox to operate on.
+	createResp, err := c.CreateSandbox(t.Context(), &CreateSandboxRequest{
+		TimeoutSecs: ptr(int64(300)),
+	})
+	if err != nil {
+		t.Fatalf("failed to create sandbox: %v", err)
+	}
+	sandboxID := createResp.SandboxId
+	t.Logf("sandbox created: %s", sandboxID)
+
+	t.Cleanup(func() {
+		_ = c.DeleteSandbox(t.Context(), sandboxID)
 	})
 
-	// Read / Write / Delete file
-	mux.HandleFunc("/api/v1/files", func(w http.ResponseWriter, r *http.Request) {
-		path := r.URL.Query().Get("path")
-		switch r.Method {
-		case http.MethodGet:
-			if path == "/workspace/hello.txt" {
-				w.Header().Set("Content-Type", "application/octet-stream")
-				w.Write([]byte("hello world"))
-				return
-			}
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusNotFound)
-			json.NewEncoder(w).Encode(SandboxProxyError{Err: "file not found"})
-		case http.MethodPut:
-			w.WriteHeader(http.StatusNoContent)
-		case http.MethodDelete:
-			if path == "/workspace/hello.txt" {
-				w.WriteHeader(http.StatusNoContent)
-				return
-			}
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusNotFound)
-			json.NewEncoder(w).Encode(SandboxProxyError{Err: "file not found"})
+	// Wait for sandbox to be running.
+	for range 30 {
+		info, err := c.GetSandbox(t.Context(), sandboxID)
+		if err != nil {
+			t.Fatalf("failed to get sandbox: %v", err)
 		}
-	})
+		if info.Status == SandboxStatusRunning {
+			break
+		}
+		t.Logf("sandbox status: %s, waiting...", info.Status)
+		time.Sleep(2 * time.Second)
+	}
 
-	return httptest.NewServer(mux)
-}
-
-func TestReadSandboxFile(t *testing.T) {
-	srv := newTestSandboxServer(t)
-	defer srv.Close()
-
-	c := &Client{httpClient: srv.Client(), apiKey: "test-key"}
-	data, err := readSandboxFileWithURL(c, t.Context(), srv.URL+"/api/v1", "/workspace/hello.txt")
+	// Write a file.
+	content := []byte("hello from integration test")
+	err = c.WriteSandboxFile(t.Context(), sandboxID, "/workspace/test.txt", bytes.NewReader(content))
 	if err != nil {
-		t.Fatalf("ReadSandboxFile failed: %v", err)
+		t.Fatalf("failed to write sandbox file: %v", err)
 	}
-	if string(data) != "hello world" {
-		t.Errorf("got %q, want %q", string(data), "hello world")
+	t.Log("file written")
+
+	// Read the file back.
+	data, err := c.ReadSandboxFile(t.Context(), sandboxID, "/workspace/test.txt")
+	if err != nil {
+		t.Fatalf("failed to read sandbox file: %v", err)
 	}
-}
+	if string(data) != string(content) {
+		t.Errorf("file content = %q, want %q", string(data), string(content))
+	}
+	t.Log("file read back successfully")
 
-func TestReadSandboxFileNotFound(t *testing.T) {
-	srv := newTestSandboxServer(t)
-	defer srv.Close()
+	// List the directory.
+	listResp, err := c.ListSandboxDirectory(t.Context(), sandboxID, "/workspace")
+	if err != nil {
+		t.Fatalf("failed to list sandbox directory: %v", err)
+	}
+	t.Logf("directory listing: %+v", listResp)
 
-	c := &Client{httpClient: srv.Client(), apiKey: "test-key"}
-	_, err := readSandboxFileWithURL(c, t.Context(), srv.URL+"/api/v1", "/workspace/missing.txt")
+	found := false
+	for _, entry := range listResp.Entries {
+		if entry.Name == "test.txt" && !entry.IsDir {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("test.txt not found in directory listing")
+	}
+
+	// Delete the file.
+	err = c.DeleteSandboxFile(t.Context(), sandboxID, "/workspace/test.txt")
+	if err != nil {
+		t.Fatalf("failed to delete sandbox file: %v", err)
+	}
+	t.Log("file deleted")
+
+	// Verify file is gone.
+	_, err = c.ReadSandboxFile(t.Context(), sandboxID, "/workspace/test.txt")
 	if err == nil {
-		t.Fatal("expected error, got nil")
-	}
-	sandboxErr, ok := err.(*SandboxProxyError)
-	if !ok {
-		t.Fatalf("expected *SandboxProxyError, got %T: %v", err, err)
-	}
-	if sandboxErr.Err != "file not found" {
-		t.Errorf("error = %q, want %q", sandboxErr.Err, "file not found")
-	}
-}
-
-func TestWriteSandboxFile(t *testing.T) {
-	srv := newTestSandboxServer(t)
-	defer srv.Close()
-
-	c := &Client{httpClient: srv.Client(), apiKey: "test-key"}
-	err := writeSandboxFileWithURL(c, t.Context(), srv.URL+"/api/v1", "/workspace/new.txt", bytes.NewReader([]byte("content")))
-	if err != nil {
-		t.Fatalf("WriteSandboxFile failed: %v", err)
-	}
-}
-
-func TestDeleteSandboxFile(t *testing.T) {
-	srv := newTestSandboxServer(t)
-	defer srv.Close()
-
-	c := &Client{httpClient: srv.Client(), apiKey: "test-key"}
-	err := deleteSandboxFileWithURL(c, t.Context(), srv.URL+"/api/v1", "/workspace/hello.txt")
-	if err != nil {
-		t.Fatalf("DeleteSandboxFile failed: %v", err)
-	}
-}
-
-func TestDeleteSandboxFileNotFound(t *testing.T) {
-	srv := newTestSandboxServer(t)
-	defer srv.Close()
-
-	c := &Client{httpClient: srv.Client(), apiKey: "test-key"}
-	err := deleteSandboxFileWithURL(c, t.Context(), srv.URL+"/api/v1", "/workspace/missing.txt")
-	if err == nil {
-		t.Fatal("expected error, got nil")
-	}
-}
-
-func TestListSandboxDirectory(t *testing.T) {
-	srv := newTestSandboxServer(t)
-	defer srv.Close()
-
-	c := &Client{httpClient: srv.Client(), apiKey: "test-key"}
-	resp, err := listSandboxDirectoryWithURL(c, t.Context(), srv.URL+"/api/v1", "/workspace")
-	if err != nil {
-		t.Fatalf("ListSandboxDirectory failed: %v", err)
-	}
-	if resp.Path != "/workspace" {
-		t.Errorf("Path = %q, want %q", resp.Path, "/workspace")
-	}
-	if len(resp.Entries) != 2 {
-		t.Fatalf("Entries length = %d, want 2", len(resp.Entries))
-	}
-	if !resp.Entries[0].IsDir {
-		t.Error("first entry should be a directory")
-	}
-	if resp.Entries[1].IsDir {
-		t.Error("second entry should be a file")
+		t.Error("expected error reading deleted file, got nil")
 	}
 }

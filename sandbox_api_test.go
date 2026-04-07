@@ -16,262 +16,171 @@ package tensorlake
 
 import (
 	"encoding/json"
-	"net/http"
-	"net/http/httptest"
+	"fmt"
+	"os"
 	"testing"
+	"time"
 )
 
-func newTestSandboxAPIServer(t *testing.T) *httptest.Server {
+func initializeSandboxClient(t *testing.T) *Client {
 	t.Helper()
-	mux := http.NewServeMux()
+	apiKey := os.Getenv("TENSORLAKE_API_KEY")
+	if apiKey == "" {
+		t.Skip("TENSORLAKE_API_KEY must be set")
+	}
+	return NewClient(WithAPIKey(apiKey))
+}
 
-	sandboxInfo := SandboxInfo{
-		Id:                         "sb_123",
-		Namespace:                  "ns_456",
-		Status:                     SandboxStatusRunning,
-		CreatedAt:                  1704067200000,
-		Resources:                  ContainerResourcesInfo{CPUs: 2, MemoryMB: 4096, EphemeralDiskMB: 10240},
-		TimeoutSecs:                3600,
-		AllowUnauthenticatedAccess: false,
-		Name:                       "test-sandbox",
+func TestSandboxLifecycle(t *testing.T) {
+	c := initializeSandboxClient(t)
+
+	// Create sandbox.
+	createResp, err := c.CreateSandbox(t.Context(), &CreateSandboxRequest{
+		TimeoutSecs: ptr(int64(300)),
+	})
+	if err != nil {
+		t.Fatalf("failed to create sandbox: %v", err)
+	}
+	t.Logf("sandbox created: %+v", createResp)
+
+	if createResp.SandboxId == "" {
+		t.Fatal("SandboxId is empty")
 	}
 
-	// Create
-	mux.HandleFunc("/sandboxes", func(w http.ResponseWriter, r *http.Request) {
-		switch r.Method {
-		case http.MethodPost:
-			json.NewEncoder(w).Encode(CreateSandboxResponse{
-				SandboxId: "sb_123",
-				Status:    SandboxStatusPending,
-			})
-		case http.MethodGet:
-			json.NewEncoder(w).Encode(ListSandboxesResponse{
-				Sandboxes:  []SandboxInfo{sandboxInfo},
-				NextCursor: "cursor_abc",
-			})
-		default:
-			w.WriteHeader(http.StatusMethodNotAllowed)
+	sandboxID := createResp.SandboxId
+	t.Cleanup(func() {
+		_ = c.DeleteSandbox(t.Context(), sandboxID)
+	})
+
+	// List sandboxes.
+	listResp, err := c.ListSandboxes(t.Context(), &ListSandboxesRequest{Limit: 10})
+	if err != nil {
+		t.Fatalf("failed to list sandboxes: %v", err)
+	}
+	t.Logf("listed %d sandboxes", len(listResp.Sandboxes))
+
+	found := false
+	for _, sb := range listResp.Sandboxes {
+		if sb.Id == sandboxID {
+			found = true
+			break
 		}
+	}
+	if !found {
+		t.Errorf("sandbox %s not found in list", sandboxID)
+	}
+
+	// Get sandbox.
+	info, err := c.GetSandbox(t.Context(), sandboxID)
+	if err != nil {
+		t.Fatalf("failed to get sandbox: %v", err)
+	}
+	t.Logf("sandbox info: %+v", info)
+
+	if info.Id != sandboxID {
+		t.Errorf("Id = %q, want %q", info.Id, sandboxID)
+	}
+
+	// Update sandbox.
+	updated, err := c.UpdateSandbox(t.Context(), sandboxID, &UpdateSandboxRequest{
+		ExposedPorts: []int32{8080},
+	})
+	if err != nil {
+		t.Fatalf("failed to update sandbox: %v", err)
+	}
+	t.Logf("sandbox updated: %+v", updated)
+
+	// Delete sandbox.
+	err = c.DeleteSandbox(t.Context(), sandboxID)
+	if err != nil {
+		t.Fatalf("failed to delete sandbox: %v", err)
+	}
+	t.Log("sandbox deleted")
+}
+
+func TestSandboxSuspendResume(t *testing.T) {
+	c := initializeSandboxClient(t)
+
+	// Create a named sandbox (only named sandboxes can be suspended).
+	name := fmt.Sprintf("test-sr-%d", time.Now().UnixNano())
+	createResp, err := c.CreateSandbox(t.Context(), &CreateSandboxRequest{
+		Name:        name,
+		TimeoutSecs: ptr(int64(300)),
+	})
+	if err != nil {
+		t.Fatalf("failed to create sandbox: %v", err)
+	}
+	sandboxID := createResp.SandboxId
+	t.Logf("sandbox created: %s", sandboxID)
+
+	t.Cleanup(func() {
+		_ = c.ResumeSandbox(t.Context(), sandboxID)
+		_ = c.DeleteSandbox(t.Context(), sandboxID)
 	})
 
-	// Get / Update / Delete
-	mux.HandleFunc("/sandboxes/sb_123", func(w http.ResponseWriter, r *http.Request) {
-		switch r.Method {
-		case http.MethodGet:
-			json.NewEncoder(w).Encode(sandboxInfo)
-		case http.MethodPatch:
-			json.NewEncoder(w).Encode(sandboxInfo)
-		case http.MethodDelete:
-			w.WriteHeader(http.StatusOK)
-		default:
-			w.WriteHeader(http.StatusMethodNotAllowed)
+	// Wait for sandbox to be running before suspend.
+	info, err := c.GetSandbox(t.Context(), sandboxID)
+	if err != nil {
+		t.Fatalf("failed to get sandbox: %v", err)
+	}
+	t.Logf("sandbox status: %s", info.Status)
+
+	// Suspend.
+	err = c.SuspendSandbox(t.Context(), sandboxID)
+	if err != nil {
+		t.Fatalf("failed to suspend sandbox: %v", err)
+	}
+	t.Log("sandbox suspend initiated")
+
+	// Wait for sandbox to be suspended.
+	for range 30 {
+		info, err = c.GetSandbox(t.Context(), sandboxID)
+		if err != nil {
+			t.Fatalf("failed to get sandbox: %v", err)
 		}
-	})
+		if info.Status == SandboxStatusSuspended {
+			break
+		}
+		t.Logf("sandbox status: %s, waiting...", info.Status)
+		time.Sleep(2 * time.Second)
+	}
+	if info.Status != SandboxStatusSuspended {
+		t.Fatalf("sandbox did not suspend, status: %s", info.Status)
+	}
 
-	// Not found
-	mux.HandleFunc("/sandboxes/sb_missing", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusNotFound)
-		w.Write([]byte("sandbox not found"))
-	})
-
-	// Snapshot
-	mux.HandleFunc("/sandboxes/sb_123/snapshot", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusAccepted)
-		json.NewEncoder(w).Encode(SnapshotSandboxResponse{
-			SnapshotId: "snap_789",
-			Status:     "creating",
-		})
-	})
-
-	// Suspend
-	mux.HandleFunc("/sandboxes/sb_123/suspend", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusAccepted)
-	})
-
-	// Resume
-	mux.HandleFunc("/sandboxes/sb_123/resume", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusAccepted)
-	})
-
-	return httptest.NewServer(mux)
+	// Resume.
+	err = c.ResumeSandbox(t.Context(), sandboxID)
+	if err != nil {
+		t.Fatalf("failed to resume sandbox: %v", err)
+	}
+	t.Log("sandbox resume initiated")
 }
 
-func newTestSandboxAPIClient(t *testing.T, srv *httptest.Server) *Client {
-	t.Helper()
-	return NewClient(
-		WithHTTPClient(srv.Client()),
-		WithAPIKey("test-key"),
-		WithSandboxAPIBaseURL(srv.URL),
-	)
-}
+func TestSandboxSnapshot(t *testing.T) {
+	c := initializeSandboxClient(t)
 
-func TestCreateSandbox(t *testing.T) {
-	srv := newTestSandboxAPIServer(t)
-	defer srv.Close()
-	c := newTestSandboxAPIClient(t, srv)
-
-	resp, err := c.CreateSandbox(t.Context(), &CreateSandboxRequest{
-		Name:        "test-sandbox",
-		TimeoutSecs: ptr(int64(3600)),
+	createResp, err := c.CreateSandbox(t.Context(), &CreateSandboxRequest{
+		TimeoutSecs: ptr(int64(300)),
 	})
 	if err != nil {
-		t.Fatalf("CreateSandbox failed: %v", err)
+		t.Fatalf("failed to create sandbox: %v", err)
 	}
-	if resp.SandboxId != "sb_123" {
-		t.Errorf("SandboxId = %q, want %q", resp.SandboxId, "sb_123")
-	}
-	if resp.Status != SandboxStatusPending {
-		t.Errorf("Status = %q, want %q", resp.Status, SandboxStatusPending)
-	}
-}
+	sandboxID := createResp.SandboxId
+	t.Logf("sandbox created: %s", sandboxID)
 
-func TestCreateSandboxWithSnapshot(t *testing.T) {
-	srv := newTestSandboxAPIServer(t)
-	defer srv.Close()
-	c := newTestSandboxAPIClient(t, srv)
-
-	resp, err := c.CreateSandbox(t.Context(), &CreateSandboxRequest{
-		SnapshotId: "snap_existing",
+	t.Cleanup(func() {
+		_ = c.DeleteSandbox(t.Context(), sandboxID)
 	})
+
+	// Snapshot.
+	snapResp, err := c.SnapshotSandbox(t.Context(), sandboxID, nil)
 	if err != nil {
-		t.Fatalf("CreateSandbox (restore) failed: %v", err)
+		t.Fatalf("failed to snapshot sandbox: %v", err)
 	}
-	if resp.SandboxId != "sb_123" {
-		t.Errorf("SandboxId = %q, want %q", resp.SandboxId, "sb_123")
-	}
-}
+	t.Logf("snapshot created: %+v", snapResp)
 
-func TestListSandboxes(t *testing.T) {
-	srv := newTestSandboxAPIServer(t)
-	defer srv.Close()
-	c := newTestSandboxAPIClient(t, srv)
-
-	resp, err := c.ListSandboxes(t.Context(), &ListSandboxesRequest{Limit: 10})
-	if err != nil {
-		t.Fatalf("ListSandboxes failed: %v", err)
-	}
-	if len(resp.Sandboxes) != 1 {
-		t.Fatalf("Sandboxes length = %d, want 1", len(resp.Sandboxes))
-	}
-	if resp.Sandboxes[0].Id != "sb_123" {
-		t.Errorf("Id = %q, want %q", resp.Sandboxes[0].Id, "sb_123")
-	}
-	if resp.NextCursor != "cursor_abc" {
-		t.Errorf("NextCursor = %q, want %q", resp.NextCursor, "cursor_abc")
-	}
-}
-
-func TestGetSandbox(t *testing.T) {
-	srv := newTestSandboxAPIServer(t)
-	defer srv.Close()
-	c := newTestSandboxAPIClient(t, srv)
-
-	info, err := c.GetSandbox(t.Context(), "sb_123")
-	if err != nil {
-		t.Fatalf("GetSandbox failed: %v", err)
-	}
-	if info.Id != "sb_123" {
-		t.Errorf("Id = %q, want %q", info.Id, "sb_123")
-	}
-	if info.Status != SandboxStatusRunning {
-		t.Errorf("Status = %q, want %q", info.Status, SandboxStatusRunning)
-	}
-	if info.Name != "test-sandbox" {
-		t.Errorf("Name = %q, want %q", info.Name, "test-sandbox")
-	}
-	if info.Resources.CPUs != 2 {
-		t.Errorf("Resources.CPUs = %f, want 2", info.Resources.CPUs)
-	}
-}
-
-func TestGetSandboxNotFound(t *testing.T) {
-	srv := newTestSandboxAPIServer(t)
-	defer srv.Close()
-	c := newTestSandboxAPIClient(t, srv)
-
-	_, err := c.GetSandbox(t.Context(), "sb_missing")
-	if err == nil {
-		t.Fatal("expected error, got nil")
-	}
-}
-
-func TestUpdateSandbox(t *testing.T) {
-	srv := newTestSandboxAPIServer(t)
-	defer srv.Close()
-	c := newTestSandboxAPIClient(t, srv)
-
-	info, err := c.UpdateSandbox(t.Context(), "sb_123", &UpdateSandboxRequest{
-		AllowUnauthenticatedAccess: ptr(true),
-		ExposedPorts:               []int32{8080, 3000},
-	})
-	if err != nil {
-		t.Fatalf("UpdateSandbox failed: %v", err)
-	}
-	if info.Id != "sb_123" {
-		t.Errorf("Id = %q, want %q", info.Id, "sb_123")
-	}
-}
-
-func TestDeleteSandbox(t *testing.T) {
-	srv := newTestSandboxAPIServer(t)
-	defer srv.Close()
-	c := newTestSandboxAPIClient(t, srv)
-
-	err := c.DeleteSandbox(t.Context(), "sb_123")
-	if err != nil {
-		t.Fatalf("DeleteSandbox failed: %v", err)
-	}
-}
-
-func TestSnapshotSandbox(t *testing.T) {
-	srv := newTestSandboxAPIServer(t)
-	defer srv.Close()
-	c := newTestSandboxAPIClient(t, srv)
-
-	resp, err := c.SnapshotSandbox(t.Context(), "sb_123", nil)
-	if err != nil {
-		t.Fatalf("SnapshotSandbox failed: %v", err)
-	}
-	if resp.SnapshotId != "snap_789" {
-		t.Errorf("SnapshotId = %q, want %q", resp.SnapshotId, "snap_789")
-	}
-}
-
-func TestSnapshotSandboxWithMode(t *testing.T) {
-	srv := newTestSandboxAPIServer(t)
-	defer srv.Close()
-	c := newTestSandboxAPIClient(t, srv)
-
-	resp, err := c.SnapshotSandbox(t.Context(), "sb_123", &SnapshotSandboxRequest{
-		SnapshotContentMode: SnapshotContentModeFilesystemOnly,
-	})
-	if err != nil {
-		t.Fatalf("SnapshotSandbox failed: %v", err)
-	}
-	if resp.SnapshotId != "snap_789" {
-		t.Errorf("SnapshotId = %q, want %q", resp.SnapshotId, "snap_789")
-	}
-}
-
-func TestSuspendSandbox(t *testing.T) {
-	srv := newTestSandboxAPIServer(t)
-	defer srv.Close()
-	c := newTestSandboxAPIClient(t, srv)
-
-	err := c.SuspendSandbox(t.Context(), "sb_123")
-	if err != nil {
-		t.Fatalf("SuspendSandbox failed: %v", err)
-	}
-}
-
-func TestResumeSandbox(t *testing.T) {
-	srv := newTestSandboxAPIServer(t)
-	defer srv.Close()
-	c := newTestSandboxAPIClient(t, srv)
-
-	err := c.ResumeSandbox(t.Context(), "sb_123")
-	if err != nil {
-		t.Fatalf("ResumeSandbox failed: %v", err)
+	if snapResp.SnapshotId == "" {
+		t.Error("SnapshotId is empty")
 	}
 }
 

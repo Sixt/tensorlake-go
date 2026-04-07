@@ -25,8 +25,8 @@ import (
 )
 
 const (
-	// SandboxAPIBaseURL is the base URL for sandbox management operations.
-	SandboxAPIBaseURL = "https://api.tensorlake.ai"
+	// SandboxAPIBaseURL is the default base URL for sandbox management operations.
+	SandboxAPIBaseURL = "https://api.tensorlake.ai/sandboxes"
 )
 
 // SandboxStatus represents the current state of a sandbox.
@@ -165,6 +165,8 @@ type SnapshotSandboxResponse struct {
 }
 
 // sandboxAPIURL constructs a URL for sandbox management API calls.
+// The path is appended to the sandbox API base URL which defaults to
+// https://api.tensorlake.ai/sandboxes.
 func (c *Client) sandboxAPIURL(path string) string {
 	base := SandboxAPIBaseURL
 	if c.sandboxAPIBaseURL != "" {
@@ -215,7 +217,7 @@ func (c *Client) CreateSandbox(ctx context.Context, in *CreateSandboxRequest) (*
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.sandboxAPIURL("/sandboxes"), bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.sandboxAPIURL(""), bytes.NewReader(body))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
@@ -235,7 +237,7 @@ func (c *Client) CreateSandbox(ctx context.Context, in *CreateSandboxRequest) (*
 //
 // [List Sandboxes API Reference]: https://docs.tensorlake.ai/api-reference/v2/sandboxes/list
 func (c *Client) ListSandboxes(ctx context.Context, in *ListSandboxesRequest) (*ListSandboxesResponse, error) {
-	reqURL := c.sandboxAPIURL("/sandboxes")
+	reqURL := c.sandboxAPIURL("")
 	params := url.Values{}
 	if in.Limit != 0 {
 		params.Add("limit", fmt.Sprintf("%d", in.Limit))
@@ -273,7 +275,7 @@ func (c *Client) ListSandboxes(ctx context.Context, in *ListSandboxesRequest) (*
 //
 // [Get Sandbox API Reference]: https://docs.tensorlake.ai/api-reference/v2/sandboxes/get
 func (c *Client) GetSandbox(ctx context.Context, sandboxID string) (*SandboxInfo, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.sandboxAPIURL("/sandboxes/"+sandboxID), nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.sandboxAPIURL("/"+sandboxID), nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
@@ -298,7 +300,7 @@ func (c *Client) UpdateSandbox(ctx context.Context, sandboxID string, in *Update
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPatch, c.sandboxAPIURL("/sandboxes/"+sandboxID), bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPatch, c.sandboxAPIURL("/"+sandboxID), bytes.NewReader(body))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
@@ -320,7 +322,7 @@ func (c *Client) UpdateSandbox(ctx context.Context, sandboxID string, in *Update
 //
 // [Delete Sandbox API Reference]: https://docs.tensorlake.ai/api-reference/v2/sandboxes/delete
 func (c *Client) DeleteSandbox(ctx context.Context, sandboxID string) error {
-	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, c.sandboxAPIURL("/sandboxes/"+sandboxID), nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, c.sandboxAPIURL("/"+sandboxID), nil)
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}
@@ -344,7 +346,7 @@ func (c *Client) SnapshotSandbox(ctx context.Context, sandboxID string, in *Snap
 		bodyReader = bytes.NewReader(body)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.sandboxAPIURL("/sandboxes/"+sandboxID+"/snapshot"), bodyReader)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.sandboxAPIURL("/"+sandboxID+"/snapshot"), bodyReader)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
@@ -367,7 +369,7 @@ func (c *Client) SnapshotSandbox(ctx context.Context, sandboxID string, in *Snap
 //
 // [Suspend Sandbox API Reference]: https://docs.tensorlake.ai/api-reference/v2/sandboxes/suspend
 func (c *Client) SuspendSandbox(ctx context.Context, sandboxID string) error {
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.sandboxAPIURL("/sandboxes/"+sandboxID+"/suspend"), nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.sandboxAPIURL("/"+sandboxID+"/suspend"), nil)
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}
@@ -384,7 +386,7 @@ func (c *Client) SuspendSandbox(ctx context.Context, sandboxID string) error {
 //
 // [Resume Sandbox API Reference]: https://docs.tensorlake.ai/api-reference/v2/sandboxes/resume
 func (c *Client) ResumeSandbox(ctx context.Context, sandboxID string) error {
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.sandboxAPIURL("/sandboxes/"+sandboxID+"/resume"), nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.sandboxAPIURL("/"+sandboxID+"/resume"), nil)
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}
