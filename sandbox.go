@@ -58,9 +58,31 @@ type SandboxDirectoryListResponse struct {
 	Entries []SandboxDirectoryEntry `json:"entries"`
 }
 
-// sandboxBaseURL returns the base URL for sandbox API requests.
-func sandboxBaseURL(sandboxID string) string {
-	return fmt.Sprintf("https://%s.sandbox.tensorlake.ai/api/v1", sandboxID)
+const (
+	// DefaultSandboxProxyBaseURL is the default base URL for the sandbox file proxy.
+	// The sandbox ID is prepended as a subdomain.
+	DefaultSandboxProxyBaseURL = "https://sandbox.tensorlake.ai"
+)
+
+// sandboxProxyURL returns the base URL for sandbox file proxy requests.
+// Format: https://{sandboxID}.{proxyHost}/api/v1
+func (c *Client) sandboxProxyURL(sandboxID string) string {
+	base := DefaultSandboxProxyBaseURL
+	if c.sandboxProxyBaseURL != "" {
+		base = c.sandboxProxyBaseURL
+	}
+	// Insert sandboxID as subdomain: https://sandbox.example.com → https://{id}.sandbox.example.com
+	return fmt.Sprintf("https://%s.%s/api/v1", sandboxID, stripScheme(base))
+}
+
+// stripScheme removes the "https://" or "http://" prefix from a URL.
+func stripScheme(u string) string {
+	for _, prefix := range []string{"https://", "http://"} {
+		if len(u) > len(prefix) && u[:len(prefix)] == prefix {
+			return u[len(prefix):]
+		}
+	}
+	return u
 }
 
 // doSandbox executes a sandbox API request and handles errors.
@@ -93,7 +115,7 @@ func doSandbox(c *Client, req *http.Request) (*http.Response, error) {
 //
 // [Read Sandbox File API Reference]: https://docs.tensorlake.ai/api-reference/v2/sandbox-files/read
 func (c *Client) ReadSandboxFile(ctx context.Context, sandboxID, path string) ([]byte, error) {
-	return readSandboxFileWithURL(c, ctx, sandboxBaseURL(sandboxID), path)
+	return readSandboxFileWithURL(c, ctx, c.sandboxProxyURL(sandboxID), path)
 }
 
 func readSandboxFileWithURL(c *Client, ctx context.Context, baseURL, path string) ([]byte, error) {
@@ -126,7 +148,7 @@ func readSandboxFileWithURL(c *Client, ctx context.Context, baseURL, path string
 //
 // [Write Sandbox File API Reference]: https://docs.tensorlake.ai/api-reference/v2/sandbox-files/write
 func (c *Client) WriteSandboxFile(ctx context.Context, sandboxID, path string, content io.Reader) error {
-	return writeSandboxFileWithURL(c, ctx, sandboxBaseURL(sandboxID), path, content)
+	return writeSandboxFileWithURL(c, ctx, c.sandboxProxyURL(sandboxID), path, content)
 }
 
 func writeSandboxFileWithURL(c *Client, ctx context.Context, baseURL, path string, content io.Reader) error {
@@ -152,7 +174,7 @@ func writeSandboxFileWithURL(c *Client, ctx context.Context, baseURL, path strin
 //
 // [Delete Sandbox File API Reference]: https://docs.tensorlake.ai/api-reference/v2/sandbox-files/delete
 func (c *Client) DeleteSandboxFile(ctx context.Context, sandboxID, path string) error {
-	return deleteSandboxFileWithURL(c, ctx, sandboxBaseURL(sandboxID), path)
+	return deleteSandboxFileWithURL(c, ctx, c.sandboxProxyURL(sandboxID), path)
 }
 
 func deleteSandboxFileWithURL(c *Client, ctx context.Context, baseURL, path string) error {
@@ -179,7 +201,7 @@ func deleteSandboxFileWithURL(c *Client, ctx context.Context, baseURL, path stri
 //
 // [List Sandbox Directory API Reference]: https://docs.tensorlake.ai/api-reference/v2/sandbox-files/list
 func (c *Client) ListSandboxDirectory(ctx context.Context, sandboxID, path string) (*SandboxDirectoryListResponse, error) {
-	return listSandboxDirectoryWithURL(c, ctx, sandboxBaseURL(sandboxID), path)
+	return listSandboxDirectoryWithURL(c, ctx, c.sandboxProxyURL(sandboxID), path)
 }
 
 func listSandboxDirectoryWithURL(c *Client, ctx context.Context, baseURL, path string) (*SandboxDirectoryListResponse, error) {
