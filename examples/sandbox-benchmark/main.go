@@ -215,9 +215,11 @@ func printStats(durs []time.Duration) {
 	fmt.Printf("  Mean:   %s\n", mean.Round(time.Millisecond))
 	fmt.Printf("  Stddev: %s\n", stddev.Round(time.Millisecond))
 	fmt.Printf("  P50:    %s\n", percentile(durs, 0.50).Round(time.Millisecond))
+	fmt.Printf("  P75:    %s\n", percentile(durs, 0.75).Round(time.Millisecond))
 	fmt.Printf("  P90:    %s\n", percentile(durs, 0.90).Round(time.Millisecond))
 	fmt.Printf("  P95:    %s\n", percentile(durs, 0.95).Round(time.Millisecond))
 	fmt.Printf("  P99:    %s\n", percentile(durs, 0.99).Round(time.Millisecond))
+	fmt.Printf("  P99.9:  %s\n", percentile(durs, 0.999).Round(time.Millisecond))
 }
 
 func percentile(sorted []time.Duration, p float64) time.Duration {
