@@ -22,6 +22,8 @@ type ErrorResponse struct {
 	Message string `json:"message"`
 	// Code is the error code for programmatic handling.
 	Code ErrorCode `json:"code"`
+	// Timestamp is the Unix epoch timestamp in milliseconds when the error occurred.
+	Timestamp int64 `json:"timestamp,omitempty"`
 	// TraceId is the trace ID of the error.
 	TraceId string `json:"trace_id,omitempty"`
 	// Details is the details of the error.
@@ -53,4 +55,7 @@ const (
 	ErrorCodeInvalidMultipart     ErrorCode = "INVALID_MULTIPART"
 	ErrorCodeMultipartStreamEnd   ErrorCode = "MULTIPART_STREAM_END"
 	ErrorCodeInvalidQueryParams   ErrorCode = "INVALID_QUERY_PARAMS"
+	ErrorCodeInvalidJobState      ErrorCode = "INVALID_JOB_STATE"
+	ErrorCodeClientDisconnect     ErrorCode = "CLIENT_DISCONNECT"
+	ErrorCodeInvalidID            ErrorCode = "INVALID_ID"
 )

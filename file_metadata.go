@@ -26,11 +26,11 @@ import (
 // FileInfo represents metadata about a file.
 type FileInfo struct {
 	FileId         string            `json:"file_id"`
-	FileName       string            `json:"file_name"`
+	FileName       string            `json:"file_name,omitempty"`
 	MimeType       MimeType          `json:"mime_type"`
 	FileSize       int64             `json:"file_size"`
-	ChecksumSHA256 string            `json:"checksum_sha256,omitempty"`
-	CreatedAt      string            `json:"created_at,omitempty"`
+	ChecksumSHA256 string            `json:"checksum_sha256"`
+	CreatedAt      string            `json:"created_at"`
 	Labels         map[string]string `json:"labels,omitempty"`
 }
 

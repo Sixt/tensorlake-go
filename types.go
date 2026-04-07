@@ -126,6 +126,10 @@ type ParsingOptions struct {
 	// Setting this to true will increase the processing time of the document.
 	// The default is false.
 	BarcodeDetection bool `json:"barcode_detection,omitempty"`
+
+	// MergeTables enables merging of tables that span across multiple pages.
+	// The default is false.
+	MergeTables bool `json:"merge_tables,omitempty"`
 }
 
 // EnrichmentOptions holds configuration for document enrichment.
@@ -152,6 +156,18 @@ type EnrichmentOptions struct {
 	// This provides Language Models context about the table and figure they are summarizing in addition to the cropped images, and could improve the summarization quality.
 	// The default is false.
 	IncludeFullPageImage bool `json:"include_full_page_image,omitempty"`
+
+	// TableCellGrounding enables grounding of table cells with bounding boxes.
+	// The default is false.
+	TableCellGrounding bool `json:"table_cell_grounding,omitempty"`
+
+	// ChartExtraction enables extraction of data from charts.
+	// The default is false.
+	ChartExtraction bool `json:"chart_extraction,omitempty"`
+
+	// KeyValueExtraction enables extraction of key-value pairs.
+	// The default is false.
+	KeyValueExtraction bool `json:"key_value_extraction,omitempty"`
 }
 
 // ParseJob represents a parse job.
@@ -221,6 +237,15 @@ type ParseResult struct {
 	// MessageUpdate is the message update for the parse job.
 	MessageUpdate string `json:"message_update,omitempty"`
 
+	// PdfBase64 is the base64-encoded PDF content of the parsed document.
+	PdfBase64 string `json:"pdf_base64,omitempty"`
+
+	// TasksCompletedCount is the number of tasks completed for the parse job.
+	TasksCompletedCount *int `json:"tasks_completed_count,omitempty"`
+
+	// TasksTotalCount is the total number of tasks for the parse job.
+	TasksTotalCount *int `json:"tasks_total_count,omitempty"`
+
 	// If the parse job was scheduled from a dataset, this field contains
 	// the dataset id. This is the identifier used in URLs and API endpoints
 	// to refer to the dataset.
@@ -286,6 +311,14 @@ type ParseResult struct {
 	Usage Usage `json:"usage"`
 }
 
+// ParseConfiguration contains the full configuration used for a parse job.
+type ParseConfiguration struct {
+	ParsingOptions              *ParsingOptions               `json:"parsing_options,omitempty"`
+	StructuredExtractionOptions []StructuredExtractionOptions `json:"structured_extraction_options,omitempty"`
+	PageClassifications         []PageClassConfig             `json:"page_classifications,omitempty"`
+	EnrichmentOptions           *EnrichmentOptions            `json:"enrichment_options,omitempty"`
+}
+
 // ParseResultOptions contains the options used for the parse job.
 // It includes the configuration options used for the parse job,
 // including the file ID, file URL, raw text, mime type,
@@ -298,7 +331,7 @@ type ParseResultOptions struct {
 	TraceId       string            `json:"trace_id"`
 	PageRange     string            `json:"page_range"`
 	JobType       JobType           `json:"job_type"`
-	Configuration *ParsingOptions   `json:"configuration"`
+	Configuration *ParseConfiguration `json:"configuration"`
 	Usage         *Usage            `json:"usage,omitempty"`
 	MessageUpdate string            `json:"message_update,omitempty"`
 }
@@ -309,15 +342,15 @@ type ParseResultOptions struct {
 // Usage is only populated for successful jobs.
 // Billing is based on the resource usage.
 type Usage struct {
-	PagesParsed                  int `json:"pages_parsed"`
-	SignatureDetectedPages       int `json:"signature_detected_pages"`
-	StrikethroughDetectedPages   int `json:"strikethrough_detected_pages"`
-	OCRInputTokenUsed            int `json:"ocr_input_token_used"`
-	OCROutputTokenUsed           int `json:"ocr_output_token_used"`
-	ExtractionInputTokenUsed     int `json:"extraction_input_token_used"`
-	ExtractionOutputTokenUsed    int `json:"extraction_output_token_used"`
-	SummarizationInputTokenUsed  int `json:"summarization_input_token_used"`
-	SummarizationOutputTokenUsed int `json:"summarization_output_token_used"`
+	PagesParsed                   int `json:"pages_parsed"`
+	SignatureDetectedPages        int `json:"signature_detected_pages"`
+	StrikethroughDetectedPages    int `json:"strikethrough_detected_pages"`
+	OCRInputTokensUsed            int `json:"ocr_input_tokens_used"`
+	OCROutputTokensUsed           int `json:"ocr_output_tokens_used"`
+	ExtractionInputTokensUsed     int `json:"extraction_input_tokens_used"`
+	ExtractionOutputTokensUsed    int `json:"extraction_output_tokens_used"`
+	SummarizationInputTokensUsed  int `json:"summarization_input_tokens_used"`
+	SummarizationOutputTokensUsed int `json:"summarization_output_tokens_used"`
 }
 
 // StructuredExtractionOptions holds configuration for structured data extraction.
@@ -508,12 +541,22 @@ type PageFragmentSignature struct {
 	Content string `json:"content"`
 }
 
+// DatasetParseJobAnalytics contains analytics about parse jobs in a dataset.
+type DatasetParseJobAnalytics struct {
+	TotalProcessingParseJobs int `json:"total_processing_parse_jobs"`
+	TotalPendingParseJobs    int `json:"total_pending_parse_jobs"`
+	TotalErrorParseJobs      int `json:"total_error_parse_jobs"`
+	TotalSuccessfulParseJobs int `json:"total_successful_parse_jobs"`
+	TotalJobs                int `json:"total_jobs"`
+}
+
 // Dataset represents a dataset.
 type Dataset struct {
-	Name        string        `json:"name"`
-	DatasetId   string        `json:"dataset_id"`
-	Description string        `json:"description,omitempty"`
-	Status      DatasetStatus `json:"status"`
-	CreatedAt   string        `json:"created_at"`
-	UpdatedAt   string        `json:"updated_at"`
+	Name        string                    `json:"name"`
+	DatasetId   string                    `json:"dataset_id"`
+	Description string                    `json:"description,omitempty"`
+	Status      DatasetStatus             `json:"status"`
+	CreatedAt   string                    `json:"created_at"`
+	UpdatedAt   string                    `json:"updated_at"`
+	Analytics   *DatasetParseJobAnalytics `json:"analytics,omitempty"`
 }

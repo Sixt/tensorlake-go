@@ -20,15 +20,34 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 )
+
+// GetDatasetRequest holds options for retrieving a dataset.
+type GetDatasetRequest struct {
+	// DatasetId is the unique identifier for the dataset.
+	//
+	// Required.
+	DatasetId string
+
+	// IncludeAnalytics includes parse job analytics in the response when set to true.
+	//
+	// Optional.
+	IncludeAnalytics bool
+}
 
 // GetDataset retrieves details for a specific dataset.
 //
 // See also: [Get Dataset API Reference]
 //
 // [Get Dataset API Reference]: https://docs.tensorlake.ai/api-reference/v2/datasets/get
-func (c *Client) GetDataset(ctx context.Context, datasetId string) (*Dataset, error) {
-	reqURL := fmt.Sprintf("%s/datasets/%s", c.baseURL, datasetId)
+func (c *Client) GetDataset(ctx context.Context, in *GetDatasetRequest) (*Dataset, error) {
+	reqURL := fmt.Sprintf("%s/datasets/%s", c.baseURL, in.DatasetId)
+	if in.IncludeAnalytics {
+		params := url.Values{}
+		params.Add("include_analytics", "true")
+		reqURL += "?" + params.Encode()
+	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
 	if err != nil {

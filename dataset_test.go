@@ -53,7 +53,7 @@ func TestDataset(t *testing.T) {
 	}
 
 	// Get dataset.
-	dd, err := c.GetDataset(t.Context(), ds.DatasetId)
+	dd, err := c.GetDataset(t.Context(), &GetDatasetRequest{DatasetId: ds.DatasetId})
 	if err != nil {
 		t.Fatalf("failed to get dataset: %v", err)
 	}
