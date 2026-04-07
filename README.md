@@ -2,7 +2,7 @@
 
 [![Go Reference](https://pkg.go.dev/badge/github.com/sixt/tensorlake-go.svg)](https://pkg.go.dev/github.com/sixt/tensorlake-go)
 
-A comprehensive Go SDK for the [Tensorlake API](https://docs.tensorlake.ai/api-reference/v2/introduction), enabling intelligent document processing with parsing, structured data extraction, and page classification capabilities.
+A comprehensive Go SDK for the [Tensorlake API](https://docs.tensorlake.ai/api-reference/v2/introduction), enabling intelligent document processing and cloud sandbox management. Parse documents, extract structured data, classify pages, and run code in isolated sandbox environments with interactive terminals and process control.
 
 ## Features
 
