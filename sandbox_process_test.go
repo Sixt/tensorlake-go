@@ -129,6 +129,26 @@ func TestProcessFullLifecycle(t *testing.T) {
 		t.Error("output line_count = 0, want > 0")
 	}
 
+	// ── Step 5b: Get stderr ─────────────────────────────────────
+	t.Log("=== get stderr")
+	errProc, err := c.StartProcess(t.Context(), sandboxID, &StartProcessRequest{
+		Command:    "/bin/sh",
+		Args:       []string{"-c", "echo stderr-line >&2"},
+		StderrMode: OutputModeCapture,
+	})
+	if err != nil {
+		t.Fatalf("StartProcess (stderr): %v", err)
+	}
+	time.Sleep(2 * time.Second)
+
+	stderrResp, err := c.GetProcessStderr(t.Context(), sandboxID, errProc.PID)
+	if err != nil {
+		t.Fatalf("GetProcessStderr: %v", err)
+	}
+	if !containsLine(stderrResp.Lines, "stderr-line") {
+		t.Errorf("stderr lines = %v, want to contain 'stderr-line'", stderrResp.Lines)
+	}
+
 	// ── Step 6: Stdin pipe (cat) ────────────────────────────────
 	t.Log("=== start cat with stdin pipe")
 	catProc, err := c.StartProcess(t.Context(), sandboxID, &StartProcessRequest{
@@ -241,6 +261,30 @@ func TestProcessFullLifecycle(t *testing.T) {
 		t.Errorf("follow stdout lines = %v, want to contain line1 and line3", followLines)
 	}
 	t.Logf("follow stdout captured %d lines", len(followLines))
+
+	// ── Step 9b: Follow stderr via SSE ──────────────────────────
+	t.Log("=== follow stderr")
+	errFollowProc, err := c.StartProcess(t.Context(), sandboxID, &StartProcessRequest{
+		Command:    "/bin/sh",
+		Args:       []string{"-c", "echo err1 >&2; echo err2 >&2"},
+		StderrMode: OutputModeCapture,
+	})
+	if err != nil {
+		t.Fatalf("StartProcess (follow stderr): %v", err)
+	}
+	time.Sleep(2 * time.Second)
+
+	var followErrLines []string
+	for evt, err := range c.FollowProcessStderr(t.Context(), sandboxID, errFollowProc.PID) {
+		if err != nil {
+			t.Fatalf("FollowProcessStderr: %v", err)
+		}
+		followErrLines = append(followErrLines, evt.Line)
+	}
+	if !containsLine(followErrLines, "err1") || !containsLine(followErrLines, "err2") {
+		t.Errorf("follow stderr lines = %v, want to contain err1 and err2", followErrLines)
+	}
+	t.Logf("follow stderr captured %d lines", len(followErrLines))
 
 	// ── Step 10: Follow merged output via SSE ───────────────────
 	t.Log("=== follow output")
