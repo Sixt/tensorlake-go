@@ -50,11 +50,12 @@ import (
 )
 
 type result struct {
-	index     int
-	sandboxID string
-	createDur time.Duration
-	readyDur  time.Duration
-	err       error
+	index      int
+	sandboxID  string
+	createDur  time.Duration // API call: create request → response (sandbox is pending)
+	pendingDur time.Duration // pending → running (excludes create API time)
+	readyDur   time.Duration // total: create request → running (createDur + pendingDur)
+	err        error
 }
 
 type levelStats struct {
@@ -63,6 +64,7 @@ type levelStats struct {
 	failed      int
 	totalDur    time.Duration
 	createDurs  []time.Duration
+	pendingDurs []time.Duration
 	readyDurs   []time.Duration
 }
 
@@ -158,11 +160,13 @@ func runLevel(ctx context.Context, c *tensorlake.Client, n int, timeout int64, p
 		} else {
 			stats.succeeded++
 			stats.createDurs = append(stats.createDurs, r.createDur)
+			stats.pendingDurs = append(stats.pendingDurs, r.pendingDur)
 			stats.readyDurs = append(stats.readyDurs, r.readyDur)
 		}
 	}
 
 	slices.SortFunc(stats.createDurs, func(a, b time.Duration) int { return int(a - b) })
+	slices.SortFunc(stats.pendingDurs, func(a, b time.Duration) int { return int(a - b) })
 	slices.SortFunc(stats.readyDurs, func(a, b time.Duration) int { return int(a - b) })
 
 	fmt.Fprintf(os.Stderr, "Done: %d succeeded, %d failed in %s\n",
@@ -187,10 +191,12 @@ func bench(ctx context.Context, c *tensorlake.Client, idx int, timeout int64, po
 	r.sandboxID = resp.SandboxId
 
 	if resp.Status == tensorlake.SandboxStatusRunning {
+		r.pendingDur = 0
 		r.readyDur = r.createDur
 		return r
 	}
 
+	pendingStart := time.Now()
 	deadline := time.Now().Add(maxWait)
 	for time.Now().Before(deadline) {
 		select {
@@ -206,6 +212,7 @@ func bench(ctx context.Context, c *tensorlake.Client, idx int, timeout int64, po
 			return r
 		}
 		if info.Status == tensorlake.SandboxStatusRunning {
+			r.pendingDur = time.Since(pendingStart)
 			r.readyDur = time.Since(start)
 			return r
 		}
@@ -251,11 +258,15 @@ func printSummary(allStats []levelStats) {
 	fmt.Println()
 
 	// Create API stats.
-	fmt.Printf("\n--- Create API Response Time ---\n")
+	fmt.Printf("\n--- Create API Response Time (request → sandbox_id) ---\n")
 	printMetricRows(allStats, pcts, func(s levelStats) []time.Duration { return s.createDurs })
 
-	// Time to running stats.
-	fmt.Printf("\n--- Time to Running ---\n")
+	// Pending to running stats.
+	fmt.Printf("\n--- Pending to Running (pending → running) ---\n")
+	printMetricRows(allStats, pcts, func(s levelStats) []time.Duration { return s.pendingDurs })
+
+	// Total time to running stats.
+	fmt.Printf("\n--- Total Time to Running (request → running) ---\n")
 	printMetricRows(allStats, pcts, func(s levelStats) []time.Duration { return s.readyDurs })
 }
 
