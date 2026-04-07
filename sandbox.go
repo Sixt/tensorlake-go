@@ -15,15 +15,19 @@
 package tensorlake
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 )
 
-// SandboxProxyError represents an error returned by the sandbox API.
+const (
+	// DefaultSandboxProxyBaseURL is the default base URL for the sandbox file proxy.
+	// The sandbox ID is prepended as a subdomain.
+	DefaultSandboxProxyBaseURL = "https://sandbox.tensorlake.ai"
+)
+
+// SandboxProxyError represents an error returned by the sandbox proxy API.
 type SandboxProxyError struct {
 	// Err is a human-readable error message.
 	Err string `json:"error"`
@@ -58,11 +62,19 @@ type SandboxDirectoryListResponse struct {
 	Entries []SandboxDirectoryEntry `json:"entries"`
 }
 
-const (
-	// DefaultSandboxProxyBaseURL is the default base URL for the sandbox file proxy.
-	// The sandbox ID is prepended as a subdomain.
-	DefaultSandboxProxyBaseURL = "https://sandbox.tensorlake.ai"
-)
+// PTYSessionInfo represents metadata about a PTY session.
+type PTYSessionInfo struct {
+	SessionId string   `json:"session_id"`
+	PID       int32    `json:"pid"`
+	Command   string   `json:"command"`
+	Args      []string `json:"args"`
+	Rows      int32    `json:"rows"`
+	Cols      int32    `json:"cols"`
+	CreatedAt int64    `json:"created_at"`
+	EndedAt   *int64   `json:"ended_at,omitempty"`
+	ExitCode  *int32   `json:"exit_code,omitempty"`
+	IsAlive   bool     `json:"is_alive"`
+}
 
 // sandboxProxyURL returns the base URL for sandbox file proxy requests.
 // Format: https://{sandboxID}.{proxyHost}/api/v1
@@ -71,7 +83,6 @@ func (c *Client) sandboxProxyURL(sandboxID string) string {
 	if c.sandboxProxyBaseURL != "" {
 		base = c.sandboxProxyBaseURL
 	}
-	// Insert sandboxID as subdomain: https://sandbox.example.com → https://{id}.sandbox.example.com
 	return fmt.Sprintf("https://%s.%s/api/v1", sandboxID, stripScheme(base))
 }
 
@@ -85,7 +96,7 @@ func stripScheme(u string) string {
 	return u
 }
 
-// doSandbox executes a sandbox API request and handles errors.
+// doSandbox executes a sandbox proxy API request and handles errors.
 func doSandbox(c *Client, req *http.Request) (*http.Response, error) {
 	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.apiKey))
 
@@ -105,122 +116,4 @@ func doSandbox(c *Client, req *http.Request) (*http.Response, error) {
 	}
 
 	return resp, nil
-}
-
-// ReadSandboxFile reads a file from a sandbox.
-//
-// The response is the raw file content as bytes.
-//
-// See also: [Read Sandbox File API Reference]
-//
-// [Read Sandbox File API Reference]: https://docs.tensorlake.ai/api-reference/v2/sandbox-files/read
-func (c *Client) ReadSandboxFile(ctx context.Context, sandboxID, path string) ([]byte, error) {
-	return readSandboxFileWithURL(c, ctx, c.sandboxProxyURL(sandboxID), path)
-}
-
-func readSandboxFileWithURL(c *Client, ctx context.Context, baseURL, path string) ([]byte, error) {
-	reqURL := fmt.Sprintf("%s/files?path=%s", baseURL, url.QueryEscape(path))
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
-	}
-
-	resp, err := doSandbox(c, req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	data, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read response body: %w", err)
-	}
-	return data, nil
-}
-
-// WriteSandboxFile writes a file to a sandbox.
-//
-// Parent directories are created automatically if they do not exist.
-// The content is written as raw bytes.
-//
-// See also: [Write Sandbox File API Reference]
-//
-// [Write Sandbox File API Reference]: https://docs.tensorlake.ai/api-reference/v2/sandbox-files/write
-func (c *Client) WriteSandboxFile(ctx context.Context, sandboxID, path string, content io.Reader) error {
-	return writeSandboxFileWithURL(c, ctx, c.sandboxProxyURL(sandboxID), path, content)
-}
-
-func writeSandboxFileWithURL(c *Client, ctx context.Context, baseURL, path string, content io.Reader) error {
-	reqURL := fmt.Sprintf("%s/files?path=%s", baseURL, url.QueryEscape(path))
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPut, reqURL, content)
-	if err != nil {
-		return fmt.Errorf("failed to create request: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/octet-stream")
-
-	resp, err := doSandbox(c, req)
-	if err != nil {
-		return err
-	}
-	resp.Body.Close()
-	return nil
-}
-
-// DeleteSandboxFile deletes a file from a sandbox.
-//
-// See also: [Delete Sandbox File API Reference]
-//
-// [Delete Sandbox File API Reference]: https://docs.tensorlake.ai/api-reference/v2/sandbox-files/delete
-func (c *Client) DeleteSandboxFile(ctx context.Context, sandboxID, path string) error {
-	return deleteSandboxFileWithURL(c, ctx, c.sandboxProxyURL(sandboxID), path)
-}
-
-func deleteSandboxFileWithURL(c *Client, ctx context.Context, baseURL, path string) error {
-	reqURL := fmt.Sprintf("%s/files?path=%s", baseURL, url.QueryEscape(path))
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, reqURL, nil)
-	if err != nil {
-		return fmt.Errorf("failed to create request: %w", err)
-	}
-
-	resp, err := doSandbox(c, req)
-	if err != nil {
-		return err
-	}
-	resp.Body.Close()
-	return nil
-}
-
-// ListSandboxDirectory lists the contents of a directory in a sandbox.
-//
-// Entries are sorted with directories first, then alphabetically.
-//
-// See also: [List Sandbox Directory API Reference]
-//
-// [List Sandbox Directory API Reference]: https://docs.tensorlake.ai/api-reference/v2/sandbox-files/list
-func (c *Client) ListSandboxDirectory(ctx context.Context, sandboxID, path string) (*SandboxDirectoryListResponse, error) {
-	return listSandboxDirectoryWithURL(c, ctx, c.sandboxProxyURL(sandboxID), path)
-}
-
-func listSandboxDirectoryWithURL(c *Client, ctx context.Context, baseURL, path string) (*SandboxDirectoryListResponse, error) {
-	reqURL := fmt.Sprintf("%s/files/list?path=%s", baseURL, url.QueryEscape(path))
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
-	}
-
-	resp, err := doSandbox(c, req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	var result SandboxDirectoryListResponse
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %w", err)
-	}
-	return &result, nil
 }
