@@ -26,9 +26,10 @@ import (
 type Client struct {
 	httpClient *http.Client
 
-	baseURL           string
-	apiKey            string
-	sandboxAPIBaseURL string
+	baseURL             string
+	apiKey              string
+	sandboxAPIBaseURL   string
+	sandboxProxyBaseURL string
 }
 
 // Option defines a configuration option for the Client.
@@ -49,9 +50,30 @@ func WithAPIKey(key string) Option {
 }
 
 // WithSandboxAPIBaseURL sets the base URL for sandbox management API calls.
+// Default: https://api.tensorlake.ai/sandboxes
+//
+// Example: WithSandboxAPIBaseURL("https://api-tensorlake.orange.sixt.com/sandboxes")
 func WithSandboxAPIBaseURL(url string) Option {
 	return func(c *Client) {
 		c.sandboxAPIBaseURL = url
+	}
+}
+
+// WithSandboxProxyBaseURL sets the base URL template for sandbox file proxy calls.
+// The sandbox ID is prepended as a subdomain. The value should include the scheme
+// and domain but NOT the sandbox ID subdomain.
+//
+// Default: https://sandbox.tensorlake.ai
+//
+// For a sandbox with ID "abc123", the file API URL becomes:
+//
+//	https://abc123.sandbox.tensorlake.ai/api/v1/files
+//
+// Example: WithSandboxProxyBaseURL("https://sandbox-tensorlake.orange.sixt.com")
+// would produce: https://abc123.sandbox-tensorlake.orange.sixt.com/api/v1/files
+func WithSandboxProxyBaseURL(url string) Option {
+	return func(c *Client) {
+		c.sandboxProxyBaseURL = url
 	}
 }
 
