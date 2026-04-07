@@ -26,8 +26,9 @@ import (
 type Client struct {
 	httpClient *http.Client
 
-	baseURL string
-	apiKey  string
+	baseURL           string
+	apiKey            string
+	sandboxAPIBaseURL string
 }
 
 // Option defines a configuration option for the Client.
@@ -44,6 +45,13 @@ func WithBaseURL(url string) Option {
 func WithAPIKey(key string) Option {
 	return func(c *Client) {
 		c.apiKey = key
+	}
+}
+
+// WithSandboxAPIBaseURL sets the base URL for sandbox management API calls.
+func WithSandboxAPIBaseURL(url string) Option {
+	return func(c *Client) {
+		c.sandboxAPIBaseURL = url
 	}
 }
 
