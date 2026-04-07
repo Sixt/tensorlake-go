@@ -67,14 +67,30 @@ const (
 	// MimeTypeXLSM represents Microsoft Excel spreadsheets (macros enabled).
 	MimeTypeXLSM MimeType = "application/vnd.ms-excel.sheet.macroenabled.12"
 
-	// Note: The following formats are not explicitly supported in Tensorlake.
-	//
-	// MimeTypeDOC   MimeType = "application/msword"
-	// MimeTypeTIFF  MimeType = "image/tiff"
-	// MimeTypeMD    MimeType = "text/markdown"
-	// MimeTypeXMD   MimeType = "text/x-markdown"
-	// MimeTypeXML   MimeType = "text/xml"
-	// MimeTypeOCTET MimeType = "application/octet-stream"
+	// MimeTypeDOC represents legacy Microsoft Word documents.
+	MimeTypeDOC MimeType = "application/msword"
+	// MimeTypePPT represents legacy Microsoft PowerPoint presentations.
+	MimeTypePPT MimeType = "application/vnd.ms-powerpoint"
+	// MimeTypeTIFF represents TIFF image files.
+	MimeTypeTIFF MimeType = "image/tiff"
+	// MimeTypeMD represents Markdown files.
+	MimeTypeMD MimeType = "text/markdown"
+	// MimeTypeXMD represents Markdown files (alternative MIME type).
+	MimeTypeXMD MimeType = "text/x-markdown"
+	// MimeTypeXML represents XML files.
+	MimeTypeXML MimeType = "text/xml"
+	// MimeTypeRTF represents Rich Text Format files.
+	MimeTypeRTF MimeType = "text/rtf"
+	// MimeTypeRTFApp represents Rich Text Format files (application MIME type).
+	MimeTypeRTFApp MimeType = "application/rtf"
+	// MimeTypeOCTET represents arbitrary binary data.
+	MimeTypeOCTET MimeType = "application/octet-stream"
+	// MimeTypePKCS7 represents S/MIME encrypted messages.
+	MimeTypePKCS7 MimeType = "application/pkcs7-mime"
+	// MimeTypeXPKCS7 represents S/MIME encrypted messages (alternative MIME type).
+	MimeTypeXPKCS7 MimeType = "application/x-pkcs7-mime"
+	// MimeTypePKCS7Sig represents S/MIME digital signatures.
+	MimeTypePKCS7Sig MimeType = "application/pkcs7-signature"
 )
 
 // ModelProvider represents the LLM provider to use for structured data extraction.
@@ -85,13 +101,13 @@ const (
 	ModelProviderTensorlake ModelProvider = "tensorlake"
 
 	// ModelProviderGemini3 represents Google Gemini 3 models.
-	ModelProviderGemini3 ModelProvider = "gemini-3"
+	ModelProviderGemini3 ModelProvider = "gemini3"
 
 	// ModelProviderSonnet represents Anthropic Sonnet models.
 	ModelProviderSonnet ModelProvider = "sonnet"
 
 	// ModelProviderGPT4oMini represents OpenAI GPT-4o-mini model.
-	ModelProviderGPT4oMini ModelProvider = "gpt_4o_mini"
+	ModelProviderGPT4oMini ModelProvider = "gpt4o_mini"
 )
 
 // OCRPipelineProvider represents the different models for OCR (Optical Character Recognition).
@@ -117,6 +133,9 @@ const (
 
 	// OCRPipelineProviderGemini3 calls Google Gemini 3 API for OCR processing.
 	OCRPipelineProviderGemini3 OCRPipelineProvider = "gemini3"
+
+	// OCRPipelineProviderTensorlake06 is a newer model variant.
+	OCRPipelineProviderTensorlake06 OCRPipelineProvider = "model06"
 )
 
 // ParseStatus indicates the status of the parse job.
@@ -228,6 +247,9 @@ const (
 	PageFragmentTypeSignature      PageFragmentType = "signature"
 	PageFragmentTypeStrikethrough  PageFragmentType = "strikethrough"
 	PageFragmentTypeBarcode        PageFragmentType = "barcode"
+	PageFragmentTypeChart          PageFragmentType = "chart"
+	PageFragmentTypeTrackedChanges PageFragmentType = "tracked_changes"
+	PageFragmentTypeComments       PageFragmentType = "comments"
 )
 
 type PaginationDirection string
@@ -253,4 +275,5 @@ const (
 	JobTypeClassify JobType = "classify"
 	JobTypeLegacy   JobType = "legacy"
 	JobTypeDataset  JobType = "dataset"
+	JobTypeEdit     JobType = "edit"
 )

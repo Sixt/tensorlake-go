@@ -63,7 +63,7 @@ func TestDataset(t *testing.T) {
 	}
 
 	// Get dataset.
-	dd, err := c.GetDataset(t.Context(), ds.DatasetId)
+	dd, err := c.GetDataset(t.Context(), &GetDatasetRequest{DatasetId: ds.DatasetId})
 	if err != nil {
 		t.Fatalf("failed to get dataset: %v", err)
 	}
@@ -133,4 +133,41 @@ func TestDataset(t *testing.T) {
 	if slices.Contains(datasets, ds.DatasetId) {
 		t.Fatalf("dataset %s is not deleted and found in list: %v", ds.DatasetId, datasets)
 	}
+}
+
+func TestGetDatasetWithAnalytics(t *testing.T) {
+	c := initializeTestClient(t)
+
+	name := fmt.Sprintf("test_analytics_%d", time.Now().UnixNano())
+	ds, err := c.CreateDataset(t.Context(), &CreateDatasetRequest{
+		Name: name,
+	})
+	if err != nil {
+		t.Fatalf("failed to create dataset: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = c.DeleteDataset(t.Context(), ds.DatasetId)
+	})
+
+	// Get without analytics.
+	d, err := c.GetDataset(t.Context(), &GetDatasetRequest{DatasetId: ds.DatasetId})
+	if err != nil {
+		t.Fatalf("failed to get dataset: %v", err)
+	}
+	t.Logf("dataset (no analytics): %+v", d)
+
+	// Get with analytics.
+	da, err := c.GetDataset(t.Context(), &GetDatasetRequest{
+		DatasetId:        ds.DatasetId,
+		IncludeAnalytics: true,
+	})
+	if err != nil {
+		t.Fatalf("failed to get dataset with analytics: %v", err)
+	}
+	t.Logf("dataset (with analytics): %+v", da)
+
+	if da.Analytics == nil {
+		t.Fatal("expected Analytics to be non-nil when IncludeAnalytics is true")
+	}
+	t.Logf("analytics: %+v", da.Analytics)
 }

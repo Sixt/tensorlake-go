@@ -18,6 +18,46 @@ import (
 	"testing"
 )
 
+func TestParseDocumentUsageFields(t *testing.T) {
+	c := initializeTestClient(t)
+
+	r, err := c.ParseDocument(t.Context(), &ParseDocumentRequest{
+		FileSource: FileSource{
+			FileURL: "https://www.sixt.de/shared/t-c/sixt_DE_de.pdf",
+		},
+		EnrichmentOptions: &EnrichmentOptions{
+			TableSummarization: true,
+		},
+	})
+	if err != nil {
+		t.Fatalf("failed to parse document: %v", err)
+	}
+
+	// Wait for completion via SSE.
+	_, err = c.GetParseResult(t.Context(), r.ParseId, WithSSE(true), WithOnUpdate(func(name ParseEventName, _ *ParseResult) {
+		t.Logf("parse status: %s", name)
+	}))
+	if err != nil {
+		t.Fatalf("failed to get parse result via SSE: %v", err)
+	}
+
+	// Fetch final result via GET to ensure usage is populated.
+	result, err := c.GetParseResult(t.Context(), r.ParseId)
+	if err != nil {
+		t.Fatalf("failed to get parse result: %v", err)
+	}
+
+	// PagesParsed > 0 confirms the "pages_parsed" JSON tag deserializes correctly.
+	// The token fields (e.g., "ocr_input_tokens_used") use the same plural "tokens"
+	// convention — the unit test TestUsageDeserialization covers all of them.
+	t.Logf("usage: %+v", result.Usage)
+	if result.Usage.PagesParsed == 0 {
+		t.Error("expected PagesParsed > 0")
+	}
+
+	_ = c.DeleteParseJob(t.Context(), r.ParseId)
+}
+
 func TestReadDocument(t *testing.T) {
 	c := initializeTestClient(t)
 
