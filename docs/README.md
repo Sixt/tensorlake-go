@@ -28,6 +28,14 @@ Welcome to the Tensorlake Go SDK documentation! This guide covers all APIs for i
    - Batch process documents with datasets
    - Use cases and best practices
 
+4. **[Sandbox APIs](./sandbox-apis.md)**
+   - Create, list, get, update, and delete sandboxes
+   - Snapshot, suspend, and resume sandboxes
+   - File operations (read, write, delete, list)
+   - PTY sessions (create, connect via WebSocket, resize, kill)
+   - Process management (start, signal, kill, stdin pipe)
+   - Output capture and SSE streaming (stdout, stderr, merged)
+
 ## Quick Navigation
 
 ### Common Tasks
@@ -38,6 +46,11 @@ Welcome to the Tensorlake Go SDK documentation! This guide covers all APIs for i
 - **Extract data**: [Parse APIs - Extract Document](./parse-apis.md#extract-document)
 - **Create a dataset**: [Dataset APIs - Create Dataset](./dataset-apis.md#create-dataset)
 - **Stream results with SSE**: [Parse APIs - Get Parse Result](./parse-apis.md#get-parse-result)
+
+- **Create a sandbox**: [Sandbox APIs - Create](./sandbox-apis.md#create-a-sandbox)
+- **Run a process**: [Sandbox APIs - Start Process](./sandbox-apis.md#start-a-process)
+- **Interactive terminal**: [Sandbox APIs - PTY](./sandbox-apis.md#connect-via-websocket)
+- **Follow output**: [Sandbox APIs - Follow Output](./sandbox-apis.md#follow-output-via-sse)
 
 ### By Use Case
 
@@ -115,6 +128,42 @@ See [Parse APIs - SSE Streaming](./parse-apis.md#example-sse-streaming) for exam
 | List datasets | `ListDatasets()` / `IterDatasets()` | [Link](./dataset-apis.md#list-datasets) |
 | Delete dataset | `DeleteDataset()` | [Link](./dataset-apis.md#delete-dataset) |
 | Parse with dataset | `ParseDataset()` | [Link](./dataset-apis.md#parse-with-dataset) |
+
+### Sandbox Management
+| Operation | Method | Documentation |
+|-----------|--------|---------------|
+| Create sandbox | `CreateSandbox()` | [Link](./sandbox-apis.md#create-a-sandbox) |
+| List sandboxes | `ListSandboxes()` | [Link](./sandbox-apis.md#list-sandboxes) |
+| Get sandbox | `GetSandbox()` | [Link](./sandbox-apis.md#get-sandbox-details) |
+| Update sandbox | `UpdateSandbox()` | [Link](./sandbox-apis.md#update-sandbox) |
+| Delete sandbox | `DeleteSandbox()` | [Link](./sandbox-apis.md#delete-terminate-sandbox) |
+| Snapshot | `SnapshotSandbox()` | [Link](./sandbox-apis.md#snapshot-and-restore) |
+| Suspend/Resume | `SuspendSandbox()` / `ResumeSandbox()` | [Link](./sandbox-apis.md#suspend-and-resume) |
+
+### Sandbox Files
+| Operation | Method | Documentation |
+|-----------|--------|---------------|
+| Read file | `ReadSandboxFile()` | [Link](./sandbox-apis.md#read-a-file) |
+| Write file | `WriteSandboxFile()` | [Link](./sandbox-apis.md#write-a-file) |
+| Delete file | `DeleteSandboxFile()` | [Link](./sandbox-apis.md#delete-a-file) |
+| List directory | `ListSandboxDirectory()` | [Link](./sandbox-apis.md#list-a-directory) |
+
+### PTY Sessions
+| Operation | Method | Documentation |
+|-----------|--------|---------------|
+| Create PTY | `CreatePTY()` | [Link](./sandbox-apis.md#create-a-pty-session) |
+| Connect WebSocket | `ConnectPTY()` | [Link](./sandbox-apis.md#connect-via-websocket) |
+| List/Get/Resize/Kill | `ListPTY()` / `GetPTY()` / `ResizePTY()` / `KillPTY()` | [Link](./sandbox-apis.md#list--get--resize--kill-pty-sessions) |
+
+### Process Management
+| Operation | Method | Documentation |
+|-----------|--------|---------------|
+| Start process | `StartProcess()` | [Link](./sandbox-apis.md#start-a-process) |
+| List/Get | `ListProcesses()` / `GetProcess()` | [Link](./sandbox-apis.md#list--get-processes) |
+| Signal/Kill | `SignalProcess()` / `KillProcess()` | [Link](./sandbox-apis.md#send-signal--kill) |
+| Stdin | `WriteProcessStdin()` / `CloseProcessStdin()` | [Link](./sandbox-apis.md#stdin-pipe) |
+| Read output | `GetProcessStdout()` / `GetProcessStderr()` / `GetProcessOutput()` | [Link](./sandbox-apis.md#read-captured-output) |
+| Follow output | `FollowProcessStdout()` / `FollowProcessStderr()` / `FollowProcessOutput()` | [Link](./sandbox-apis.md#follow-output-via-sse) |
 
 ## Configuration Reference
 

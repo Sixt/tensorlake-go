@@ -7,10 +7,13 @@ A comprehensive Go SDK for the [Tensorlake API](https://docs.tensorlake.ai/api-r
 ## Features
 
 - **Document Parsing**: Convert PDFs, DOCX, images, and more to structured markdown
-- **Data Extraction**:  Extract structured data using JSON schemas
+- **Data Extraction**: Extract structured data using JSON schemas
 - **Page Classification**: Classify pages by content type
 - **File Management**: Upload and manage documents
 - **Datasets**: Reusable parsing configurations for consistent processing
+- **Sandboxes**: Create, manage, and interact with cloud sandboxes
+- **PTY Sessions**: Interactive terminal sessions via WebSocket
+- **Process Management**: Start, monitor, and control processes in sandboxes
 - **SSE Support**: Real-time progress updates via Server-Sent Events
 - **Iterator Pattern**: Easy pagination through results
 
@@ -83,6 +86,7 @@ for _, page := range result.Pages {
 - **[File Management APIs](./docs/file-apis.md)** - Upload, list, retrieve metadata, and delete files
 - **[Parse APIs](./docs/parse-apis.md)** - Parse documents, extract data, and classify pages
 - **[Dataset APIs](./docs/dataset-apis.md)** - Create reusable parsing configurations
+- **[Sandbox APIs](./docs/sandbox-apis.md)** - Create and manage cloud sandboxes, PTY sessions, and processes
 
 ### Comprehensive Examples
 
@@ -180,6 +184,112 @@ for _, fileId := range fileIds {
 }
 ```
 
+## Sandbox APIs
+
+### Create and Use a Sandbox
+
+```go
+// Create a sandbox
+sb, _ := c.CreateSandbox(ctx, &tensorlake.CreateSandboxRequest{
+    TimeoutSecs: ptr(int64(300)),
+})
+
+// Wait for it to be running
+for {
+    info, _ := c.GetSandbox(ctx, sb.SandboxId)
+    if info.Status == tensorlake.SandboxStatusRunning {
+        break
+    }
+    time.Sleep(time.Second)
+}
+
+// Run a process
+proc, _ := c.StartProcess(ctx, sb.SandboxId, &tensorlake.StartProcessRequest{
+    Command:    "python",
+    Args:       []string{"-c", "print('hello from sandbox')"},
+    StdoutMode: tensorlake.OutputModeCapture,
+})
+
+// Get the output
+time.Sleep(2 * time.Second)
+stdout, _ := c.GetProcessStdout(ctx, sb.SandboxId, proc.PID)
+fmt.Println(stdout.Lines) // ["hello from sandbox"]
+
+// Clean up
+c.DeleteSandbox(ctx, sb.SandboxId)
+```
+
+### Interactive Terminal via PTY
+
+```go
+// Create a PTY session
+pty, _ := c.CreatePTY(ctx, sandboxID, &tensorlake.CreatePTYRequest{
+    Command: "/bin/sh",
+    Rows:    24,
+    Cols:    80,
+})
+
+// Connect via WebSocket
+conn, _ := c.ConnectPTY(ctx, sandboxID, pty.SessionId, pty.Token)
+defer conn.Close()
+
+conn.Ready(ctx)                           // Signal readiness
+conn.Write(ctx, []byte("ls\n"))           // Send input
+msg, _ := conn.Read(ctx)                  // Read output
+conn.Resize(ctx, 120, 40)                 // Resize terminal
+```
+
+See the [interactive terminal example](./examples/sandbox-terminal) for a complete implementation.
+
+### Follow Process Output via SSE
+
+```go
+proc, _ := c.StartProcess(ctx, sandboxID, &tensorlake.StartProcessRequest{
+    Command:    "/bin/sh",
+    Args:       []string{"-c", "for i in 1 2 3; do echo line$i; sleep 1; done"},
+    StdoutMode: tensorlake.OutputModeCapture,
+})
+
+for evt, err := range c.FollowProcessStdout(ctx, sandboxID, proc.PID) {
+    if err != nil {
+        break
+    }
+    fmt.Printf("[%d] %s\n", evt.Timestamp, evt.Line)
+}
+```
+
+### Sandbox Lifecycle
+
+Sandboxes support the full lifecycle: create, suspend, resume, snapshot, and restore.
+
+```go
+// Suspend a named sandbox
+c.SuspendSandbox(ctx, sandboxID)
+
+// Resume it later
+c.ResumeSandbox(ctx, sandboxID)
+
+// Snapshot for later restore
+snap, _ := c.SnapshotSandbox(ctx, sandboxID, nil)
+
+// Restore from snapshot
+restored, _ := c.CreateSandbox(ctx, &tensorlake.CreateSandboxRequest{
+    SnapshotId: snap.SnapshotId,
+})
+```
+
+### Custom Endpoints
+
+All sandbox URLs are configurable for custom deployments:
+
+```go
+c := tensorlake.NewClient(
+    tensorlake.WithAPIKey("your-key"),
+    tensorlake.WithSandboxAPIBaseURL("https://api-tensorlake.example.com/sandboxes"),
+    tensorlake.WithSandboxProxyBaseURL("https://sandbox-tensorlake.example.com"),
+)
+```
+
 ## Advanced Features
 
 ### Server-Sent Events (SSE)
@@ -271,6 +381,11 @@ if err != nil {
 4. **Error Handling** - Always check error responses and handle retries appropriately
 5. **Labels** - Use labels to organize and filter files and parse jobs
 6. **Iterators** - Use iterator methods for efficient pagination through large result sets
+
+## Examples
+
+- **[sandbox-terminal](./examples/sandbox-terminal)** - Interactive terminal session via PTY WebSocket
+- **[sandbox-benchmark](./examples/sandbox-benchmark)** - Concurrent sandbox creation latency benchmark
 
 ## Contributing
 
