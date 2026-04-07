@@ -70,7 +70,7 @@ type levelStats struct {
 
 func main() {
 	timeout := flag.Int64("timeout", 120, "sandbox timeout in seconds")
-	pollInterval := flag.Duration("poll", 500*time.Millisecond, "poll interval for status checks")
+	pollInterval := flag.Duration("poll", 100*time.Millisecond, "poll interval for status checks")
 	maxWait := flag.Duration("max-wait", 120*time.Second, "maximum wait time per sandbox")
 	flag.Parse()
 
