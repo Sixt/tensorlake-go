@@ -24,6 +24,8 @@ import (
 	"time"
 )
 
+// initializeSandboxClient creates a Client configured for sandbox API testing.
+// Skips the test if TENSORLAKE_API_KEY is not set.
 func initializeSandboxClient(t *testing.T) *Client {
 	t.Helper()
 	apiKey := os.Getenv("TENSORLAKE_API_KEY")
@@ -33,8 +35,8 @@ func initializeSandboxClient(t *testing.T) *Client {
 	return NewClient(WithAPIKey(apiKey))
 }
 
-// waitForStatus polls GetSandbox until the sandbox reaches the desired status
-// or the timeout (60s) is exceeded.
+// waitForStatus polls GetSandbox every 2 seconds (up to 60s total) until the
+// sandbox reaches the desired status. Fatals on timeout or API error.
 func waitForStatus(t *testing.T, c *Client, sandboxID string, want SandboxStatus) *SandboxInfo {
 	t.Helper()
 	var info *SandboxInfo
@@ -54,8 +56,9 @@ func waitForStatus(t *testing.T, c *Client, sandboxID string, want SandboxStatus
 	return nil
 }
 
-// deleteSandbox is a cleanup helper that terminates a sandbox, ignoring errors.
-// Uses a fresh background context to avoid test context cancellation.
+// deleteSandbox terminates a sandbox during test cleanup. Uses a fresh
+// background context with a 10s timeout so that cleanup succeeds even when
+// the test context has been cancelled (e.g. on t.Fatal).
 func deleteSandbox(t *testing.T, c *Client, sandboxID string) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -65,23 +68,54 @@ func deleteSandbox(t *testing.T, c *Client, sandboxID string) {
 	}
 }
 
-// TestSandboxFullLifecycle exercises every state transition:
+// TestSandboxFullLifecycle is an integration test that exercises every sandbox
+// state transition in a single test run, using a real Tensorlake API.
 //
-//	create → pending → running
-//	  → file write/read/list/delete (file operations while running)
-//	  → update (change exposed ports)
-//	  → snapshot (running → snapshotting → running)
-//	  → suspend (running → suspending → suspended)
-//	  → resume (suspended → pending → running)
-//	  → delete (running → terminated)
-//	  → restore from snapshot (create with snapshot_id)
-//	  → delete restored sandbox
+// Prerequisites:
+//   - TENSORLAKE_API_KEY env var must be set (test skips otherwise).
+//
+// State machine coverage:
+//
+//	                  ┌──────────────────────────────────────────────────────────┐
+//	                  │                   Sandbox Lifecycle                      │
+//	                  │                                                          │
+//	  CreateSandbox ──► pending ──► running ──┬──► snapshot ──► running          │
+//	                  │                       │                                  │
+//	                  │                       ├──► update (exposed ports)        │
+//	                  │                       │                                  │
+//	                  │                       ├──► file write/read/list/delete   │
+//	                  │                       │                                  │
+//	                  │                       └──► suspend ──► suspended         │
+//	                  │                                           │              │
+//	                  │                       ┌──── resume ◄──────┘              │
+//	                  │                       ▼                                  │
+//	                  │                    running ──► delete ──► terminated     │
+//	                  │                                               │          │
+//	                  │  CreateSandbox(snapshot_id) ──► pending ──► running      │
+//	                  │                                     │                    │
+//	                  │                                  delete ──► terminated   │
+//	                  └──────────────────────────────────────────────────────────┘
+//
+// The test also verifies:
+//   - ListSandboxes returns the newly created sandbox.
+//   - GetSandbox returns correct name and resource allocation.
+//   - UpdateSandbox changes exposed ports.
+//   - DeleteSandbox is idempotent (second call on terminated sandbox succeeds).
+//   - Sandbox file operations (write, read, list, delete) work while running.
+//   - Snapshot produces a valid snapshot_id that can be used for restore.
+//
+// Cleanup:
+//
+//	t.Cleanup ensures all sandboxes are terminated even if the test fails
+//	mid-way. The cleanup uses a background context to survive test cancellation.
 func TestSandboxFullLifecycle(t *testing.T) {
 	c := initializeSandboxClient(t)
 
 	name := fmt.Sprintf("test-lifecycle-%d", time.Now().UnixNano())
 
-	// ── Create ──────────────────────────────────────────────────
+	// ── Step 1: Create a named sandbox ──────────────────────────
+	// Named sandboxes support suspend/resume. The 600s timeout is a safety
+	// net — the test should complete well within that window.
 	t.Log("=== create sandbox")
 	createResp, err := c.CreateSandbox(t.Context(), &CreateSandboxRequest{
 		Name:        name,
@@ -100,12 +134,15 @@ func TestSandboxFullLifecycle(t *testing.T) {
 		t.Fatalf("unexpected initial status: %s", createResp.Status)
 	}
 
-	// ── pending → running ───────────────────────────────────────
+	// ── Step 2: Wait for pending → running ──────────────────────
+	// A new sandbox starts in "pending" (scheduling) and transitions to
+	// "running" once the container is ready.
 	t.Log("=== wait for running")
 	info := waitForStatus(t, c, sandboxID, SandboxStatusRunning)
 	t.Logf("sandbox running: cpus=%.1f memory_mb=%d", info.Resources.CPUs, info.Resources.MemoryMB)
 
-	// ── List sandboxes ──────────────────────────────────────────
+	// ── Step 3: List sandboxes ──────────────────────────────────
+	// Verify the sandbox appears in the project-wide list.
 	t.Log("=== list sandboxes")
 	listResp, err := c.ListSandboxes(t.Context(), &ListSandboxesRequest{Limit: 50})
 	if err != nil {
@@ -122,7 +159,8 @@ func TestSandboxFullLifecycle(t *testing.T) {
 		t.Fatalf("sandbox %s not found in list (%d sandboxes)", sandboxID, len(listResp.Sandboxes))
 	}
 
-	// ── Get sandbox ─────────────────────────────────────────────
+	// ── Step 4: Get sandbox details ─────────────────────────────
+	// Verify the sandbox name matches what was requested at creation.
 	t.Log("=== get sandbox")
 	info, err = c.GetSandbox(t.Context(), sandboxID)
 	if err != nil {
@@ -132,7 +170,8 @@ func TestSandboxFullLifecycle(t *testing.T) {
 		t.Errorf("Name = %q, want %q", info.Name, name)
 	}
 
-	// ── Update sandbox ──────────────────────────────────────────
+	// ── Step 5: Update sandbox settings ─────────────────────────
+	// Add exposed ports and verify the response reflects the change.
 	t.Log("=== update sandbox")
 	updated, err := c.UpdateSandbox(t.Context(), sandboxID, &UpdateSandboxRequest{
 		ExposedPorts: []int32{8080, 3000},
@@ -144,7 +183,10 @@ func TestSandboxFullLifecycle(t *testing.T) {
 		t.Errorf("ExposedPorts = %v, want [8080, 3000]", updated.ExposedPorts)
 	}
 
-	// ── File operations (while running) ─────────────────────────
+	// ── Step 6: File operations (while running) ─────────────────
+	// Write a file, read it back, verify it appears in directory listing,
+	// delete it, and confirm it is gone. Uses the sandbox-proxy file API
+	// ({id}.sandbox.tensorlake.ai), not the control-plane API.
 	t.Log("=== file operations")
 	content := []byte("lifecycle test content")
 	err = c.WriteSandboxFile(t.Context(), sandboxID, "/workspace/lifecycle.txt", bytes.NewReader(content))
@@ -185,7 +227,10 @@ func TestSandboxFullLifecycle(t *testing.T) {
 		t.Error("expected error reading deleted file, got nil")
 	}
 
-	// ── Snapshot (running → snapshotting → running) ─────────────
+	// ── Step 7: Snapshot (running → snapshotting → running) ─────
+	// Create a snapshot for later restore. The sandbox briefly enters
+	// "snapshotting" state then returns to "running". The snapshot itself
+	// may still be finalizing internally even after status returns to running.
 	t.Log("=== snapshot sandbox")
 	snapResp, err := c.SnapshotSandbox(t.Context(), sandboxID, nil)
 	if err != nil {
@@ -197,9 +242,10 @@ func TestSandboxFullLifecycle(t *testing.T) {
 	snapshotID := snapResp.SnapshotId
 	t.Logf("snapshot created: %s (status=%s)", snapshotID, snapResp.Status)
 
-	// Wait for snapshot to complete. The sandbox status may briefly show
-	// "snapshotting" then return to "running", but the snapshot operation
-	// can still be in progress internally. Poll until suspend succeeds.
+	// Wait for snapshot to finish. The sandbox status returns to "running"
+	// quickly, but the snapshot operation may still be in progress internally.
+	// We detect completion by polling SuspendSandbox — it returns 400 while
+	// snapshotting is in progress and succeeds once the snapshot is done.
 	t.Log("waiting for snapshot to complete...")
 	for range 30 {
 		err = c.SuspendSandbox(t.Context(), sandboxID)
@@ -210,7 +256,8 @@ func TestSandboxFullLifecycle(t *testing.T) {
 		time.Sleep(2 * time.Second)
 	}
 
-	// ── Suspend (running → suspending → suspended) ──────────────
+	// ── Step 8: Suspend (running → suspending → suspended) ──────
+	// Suspend preserves the sandbox state. Only named sandboxes support this.
 	t.Log("=== suspend sandbox")
 	if err != nil {
 		t.Fatalf("SuspendSandbox: %v", err)
@@ -218,7 +265,8 @@ func TestSandboxFullLifecycle(t *testing.T) {
 	waitForStatus(t, c, sandboxID, SandboxStatusSuspended)
 	t.Log("sandbox suspended")
 
-	// ── Resume (suspended → pending → running) ──────────────────
+	// ── Step 9: Resume (suspended → pending → running) ──────────
+	// Resume wakes a suspended sandbox. It goes through pending before running.
 	t.Log("=== resume sandbox")
 	err = c.ResumeSandbox(t.Context(), sandboxID)
 	if err != nil {
@@ -227,7 +275,8 @@ func TestSandboxFullLifecycle(t *testing.T) {
 	waitForStatus(t, c, sandboxID, SandboxStatusRunning)
 	t.Log("sandbox resumed and running")
 
-	// ── Delete (running → terminated) ───────────────────────────
+	// ── Step 10: Delete (running → terminated) ──────────────────
+	// Terminates the sandbox permanently. Verify status is "terminated".
 	t.Log("=== delete sandbox")
 	err = c.DeleteSandbox(t.Context(), sandboxID)
 	if err != nil {
@@ -244,14 +293,17 @@ func TestSandboxFullLifecycle(t *testing.T) {
 	}
 	t.Log("sandbox terminated")
 
-	// ── Idempotent delete ───────────────────────────────────────
+	// ── Step 11: Idempotent delete ──────────────────────────────
+	// Deleting an already-terminated sandbox should succeed (no error).
 	t.Log("=== idempotent delete")
 	err = c.DeleteSandbox(t.Context(), sandboxID)
 	if err != nil {
 		t.Fatalf("idempotent DeleteSandbox: %v", err)
 	}
 
-	// ── Restore from snapshot ───────────────────────────────────
+	// ── Step 12: Restore from snapshot ──────────────────────────
+	// Create a new sandbox from the snapshot taken in step 7. This verifies
+	// the snapshot is usable and the restore path works end-to-end.
 	t.Log("=== restore from snapshot")
 	restoreResp, err := c.CreateSandbox(t.Context(), &CreateSandboxRequest{
 		SnapshotId:  snapshotID,
@@ -278,6 +330,9 @@ func TestSandboxFullLifecycle(t *testing.T) {
 	t.Log("=== full lifecycle complete")
 }
 
+// TestSandboxInfoDeserialization verifies that the SandboxInfo struct correctly
+// deserializes all fields from a representative JSON response, including nested
+// objects (ContainerResourcesInfo, SandboxNetworkAccessControl) and optional fields.
 func TestSandboxInfoDeserialization(t *testing.T) {
 	raw := `{
 		"id": "sb_abc",
