@@ -296,8 +296,10 @@ type ParseResult struct {
 	// Page - one structured data object for each page.
 	StructuredData []StructuredData `json:"structured_data,omitempty"`
 
+	// MergedTables contains tables that were merged across multiple pages.
+	MergedTables []MergedTable `json:"merged_tables,omitempty"`
+
 	// Options contains the options used for the parse job.
-	// Note that this field is no
 	Options *ParseResultOptions `json:"options,omitempty"`
 
 	// Resource usage associated with the parse job.
@@ -309,6 +311,32 @@ type ParseResult struct {
 	//
 	// Billing is based on the resource usage.
 	Usage Usage `json:"usage"`
+}
+
+// MergeTableActions describes the merge operations performed on the table.
+type MergeTableActions struct {
+	// Pages is the list of page numbers that were merged.
+	Pages []int `json:"pages,omitempty"`
+	// TargetColumns is the target column count for the merged table.
+	TargetColumns *int `json:"target_columns,omitempty"`
+}
+
+// MergedTable represents a table that was merged across multiple pages.
+type MergedTable struct {
+	// MergedTableId is the unique identifier for the merged table.
+	MergedTableId string `json:"merged_table_id"`
+	// MergedTableHTML is the HTML representation of the merged table.
+	MergedTableHTML string `json:"merged_table_html"`
+	// StartPage is the first page of the merged table.
+	StartPage int `json:"start_page"`
+	// EndPage is the last page of the merged table.
+	EndPage int `json:"end_page"`
+	// PagesMerged is the number of pages that were merged.
+	PagesMerged int `json:"pages_merged"`
+	// Summary is an optional summary of the merged table.
+	Summary string `json:"summary,omitempty"`
+	// MergeActions describes the merge operations performed.
+	MergeActions *MergeTableActions `json:"merge_actions,omitempty"`
 }
 
 // ParseConfiguration contains the full configuration used for a parse job.
@@ -438,7 +466,7 @@ type Page struct {
 
 	// If the page was classified into a specific class, this field contains
 	// the reason for the classification.
-	ClassificationReasons string `json:"classification_reasons,omitempty"`
+	ClassificationReason string `json:"classification_reason,omitempty"`
 }
 
 // PageFragment represents a fragment of a page in the parsed document.

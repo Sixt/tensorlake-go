@@ -56,8 +56,9 @@ type ListParseJobsRequest struct {
 	Direction      PaginationDirection `json:"direction,omitempty"`
 	DatasetName    string              `json:"dataset_name,omitempty"`
 	Limit          int                 `json:"limit,omitempty"`
-	FileName       string              `json:"file_name,omitempty"`
+	FileName       string              `json:"filename,omitempty"`
 	Status         ParseStatus         `json:"status,omitempty"`
+	Id             string              `json:"id,omitempty"`
 	CreatedAfter   string              `json:"created_after,omitempty"`
 	CreatedBefore  string              `json:"created_before,omitempty"`
 	FinishedAfter  string              `json:"finished_after,omitempty"`
@@ -85,7 +86,10 @@ func (c *Client) ListParseJobs(ctx context.Context, in *ListParseJobsRequest) (*
 		params.Add("limit", fmt.Sprintf("%d", in.Limit))
 	}
 	if in.FileName != "" {
-		params.Add("file_name", in.FileName)
+		params.Add("filename", in.FileName)
+	}
+	if in.Id != "" {
+		params.Add("id", in.Id)
 	}
 	if in.Status != "" {
 		params.Add("status", string(in.Status))

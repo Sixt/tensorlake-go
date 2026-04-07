@@ -30,6 +30,11 @@ type ClassifyDocumentRequest struct {
 	PageRange           string            `json:"page_range,omitempty"`
 	MimeType            string            `json:"mime_type,omitempty"`
 	Labels              map[string]string `json:"labels,omitempty"`
+
+	// FileName is the name of the file. This is populated when file_id is used.
+	//
+	// Optional.
+	FileName string `json:"file_name,omitempty"`
 }
 
 // ClassifyDocument submits a document for page classification.

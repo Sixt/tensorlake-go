@@ -73,6 +73,11 @@ type ParseDocumentRequest struct {
 	// returned in the read response.
 	Labels map[string]string `json:"labels,omitempty"`
 
+	// FileName is the name of the file. This is populated when file_id is used.
+	//
+	// Optional.
+	FileName string `json:"file_name,omitempty"`
+
 	// MimeType is the MIME type of the file. This is used to determine how to process the file.
 	MimeType MimeType `json:"mime_type,omitempty"`
 }
