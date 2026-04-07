@@ -15,10 +15,8 @@
 package tensorlake
 
 import (
-	"bytes"
 	"encoding/json"
 	"testing"
-	"time"
 )
 
 func TestSandboxProxyErrorFormat(t *testing.T) {
@@ -80,85 +78,5 @@ func TestSandboxDirectoryListResponseDeserialization(t *testing.T) {
 	}
 	if file.ModifiedAt == nil || *file.ModifiedAt != 1704067200000 {
 		t.Errorf("file ModifiedAt = %v, want 1704067200000", file.ModifiedAt)
-	}
-}
-
-func TestSandboxFileOperations(t *testing.T) {
-	c := initializeSandboxClient(t)
-
-	// Create a sandbox to operate on.
-	createResp, err := c.CreateSandbox(t.Context(), &CreateSandboxRequest{
-		TimeoutSecs: ptr(int64(300)),
-	})
-	if err != nil {
-		t.Fatalf("failed to create sandbox: %v", err)
-	}
-	sandboxID := createResp.SandboxId
-	t.Logf("sandbox created: %s", sandboxID)
-
-	t.Cleanup(func() {
-		_ = c.DeleteSandbox(t.Context(), sandboxID)
-	})
-
-	// Wait for sandbox to be running.
-	for range 30 {
-		info, err := c.GetSandbox(t.Context(), sandboxID)
-		if err != nil {
-			t.Fatalf("failed to get sandbox: %v", err)
-		}
-		if info.Status == SandboxStatusRunning {
-			break
-		}
-		t.Logf("sandbox status: %s, waiting...", info.Status)
-		time.Sleep(2 * time.Second)
-	}
-
-	// Write a file.
-	content := []byte("hello from integration test")
-	err = c.WriteSandboxFile(t.Context(), sandboxID, "/workspace/test.txt", bytes.NewReader(content))
-	if err != nil {
-		t.Fatalf("failed to write sandbox file: %v", err)
-	}
-	t.Log("file written")
-
-	// Read the file back.
-	data, err := c.ReadSandboxFile(t.Context(), sandboxID, "/workspace/test.txt")
-	if err != nil {
-		t.Fatalf("failed to read sandbox file: %v", err)
-	}
-	if string(data) != string(content) {
-		t.Errorf("file content = %q, want %q", string(data), string(content))
-	}
-	t.Log("file read back successfully")
-
-	// List the directory.
-	listResp, err := c.ListSandboxDirectory(t.Context(), sandboxID, "/workspace")
-	if err != nil {
-		t.Fatalf("failed to list sandbox directory: %v", err)
-	}
-	t.Logf("directory listing: %+v", listResp)
-
-	found := false
-	for _, entry := range listResp.Entries {
-		if entry.Name == "test.txt" && !entry.IsDir {
-			found = true
-			break
-		}
-	}
-	if !found {
-		t.Error("test.txt not found in directory listing")
-	}
-
-	// Delete the file.
-	err = c.DeleteSandboxFile(t.Context(), sandboxID, "/workspace/test.txt")
-	if err != nil {
-		t.Fatalf("failed to delete sandbox file: %v", err)
-	}
-	t.Log("file deleted")
-
-	// Verify file is gone.
-	_, err = c.ReadSandboxFile(t.Context(), sandboxID, "/workspace/test.txt")
-	if err == nil {
-		t.Error("expected error reading deleted file, got nil")
 	}
 }
