@@ -16,20 +16,20 @@
 // running a series of concurrency levels, launching N sandboxes at each
 // level and measuring create API response time and time-to-running.
 //
+// Each concurrency level is repeated R times (default 1). The summary
+// reports mean±std across repeats for each percentile.
+//
 // Usage:
 //
 //	export TENSORLAKE_API_KEY=<your-api-key>
 //	go run ./examples/sandbox-benchmark 1 10 100
-//	go run ./examples/sandbox-benchmark 1 10 100 1000
-//
-// Each positional argument is a concurrency level. They run sequentially,
-// one after the other. All sandboxes from a level are cleaned up before
-// the next level starts.
+//	go run ./examples/sandbox-benchmark -repeat 5 1 10 100 1000
 //
 // Flags:
 //
+//	-repeat    Number of times to repeat each concurrency level (default: 1)
 //	-timeout   Sandbox timeout in seconds (default: 120)
-//	-poll      Poll interval for status checks (default: 500ms)
+//	-poll      Poll interval for status checks (default: 100ms)
 //	-max-wait  Maximum wait time per sandbox before giving up (default: 120s)
 package main
 
@@ -58,17 +58,31 @@ type result struct {
 	err        error
 }
 
-type levelStats struct {
+// runStats holds the percentile values from a single run at a given concurrency level.
+type runStats struct {
 	concurrency int
 	succeeded   int
 	failed      int
 	totalDur    time.Duration
-	createDurs  []time.Duration
-	pendingDurs []time.Duration
-	readyDurs   []time.Duration
+
+	// Percentile values extracted from this run's sorted durations.
+	createPcts  map[string]time.Duration
+	pendingPcts map[string]time.Duration
+	readyPcts   map[string]time.Duration
+}
+
+var pctDefs = []struct {
+	name string
+	p    float64
+}{
+	{"Min", 0},
+	{"P50", 0.50}, {"P75", 0.75}, {"P90", 0.90},
+	{"P95", 0.95}, {"P99", 0.99}, {"P99.9", 0.999},
+	{"Max", 1.0},
 }
 
 func main() {
+	repeat := flag.Int("repeat", 1, "number of times to repeat each concurrency level")
 	timeout := flag.Int64("timeout", 120, "sandbox timeout in seconds")
 	pollInterval := flag.Duration("poll", 100*time.Millisecond, "poll interval for status checks")
 	maxWait := flag.Duration("max-wait", 120*time.Second, "maximum wait time per sandbox")
@@ -99,26 +113,41 @@ func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
 
-	var allStats []levelStats
+	// allRuns[levelIdx] = slice of runStats, one per repeat.
+	allRuns := make([][]runStats, len(levels))
 
-	for i, n := range levels {
-		if ctx.Err() != nil {
-			break
+	runIdx := 0
+	totalRuns := len(levels) * *repeat
+	for li, n := range levels {
+		for r := range *repeat {
+			if ctx.Err() != nil {
+				break
+			}
+			runIdx++
+			fmt.Fprintf(os.Stderr, "\n=== Run %d/%d: concurrency=%d repeat=%d/%d ===\n",
+				runIdx, totalRuns, n, r+1, *repeat)
+			stats := runLevel(ctx, c, n, *timeout, *pollInterval, *maxWait)
+			allRuns[li] = append(allRuns[li], stats)
 		}
-		if i > 0 {
-			fmt.Fprintf(os.Stderr, "\n")
-		}
-		fmt.Fprintf(os.Stderr, "=== Level %d/%d: %d concurrent sandboxes ===\n", i+1, len(levels), n)
-		stats := runLevel(ctx, c, n, *timeout, *pollInterval, *maxWait)
-		allStats = append(allStats, stats)
 	}
 
-	// Print summary table.
 	fmt.Printf("\n")
-	printSummary(allStats)
+	if *repeat == 1 {
+		// Single repeat: show raw percentile values.
+		var singleRuns []runStats
+		for _, runs := range allRuns {
+			if len(runs) > 0 {
+				singleRuns = append(singleRuns, runs[0])
+			}
+		}
+		printSummarySingle(singleRuns)
+	} else {
+		// Multiple repeats: show mean±std across repeats.
+		printSummaryRepeated(allRuns)
+	}
 }
 
-func runLevel(ctx context.Context, c *tensorlake.Client, n int, timeout int64, pollInterval, maxWait time.Duration) levelStats {
+func runLevel(ctx context.Context, c *tensorlake.Client, n int, timeout int64, pollInterval, maxWait time.Duration) runStats {
 	fmt.Fprintf(os.Stderr, "Launching %d sandboxes...\n", n)
 	start := time.Now()
 
@@ -151,23 +180,44 @@ func runLevel(ctx context.Context, c *tensorlake.Client, n int, timeout int64, p
 	}
 	cleanWg.Wait()
 
-	// Collect stats.
-	stats := levelStats{concurrency: n, totalDur: totalDur}
+	// Collect and sort durations.
+	stats := runStats{
+		concurrency: n,
+		totalDur:    totalDur,
+		createPcts:  make(map[string]time.Duration),
+		pendingPcts: make(map[string]time.Duration),
+		readyPcts:   make(map[string]time.Duration),
+	}
+	var createDurs, pendingDurs, readyDurs []time.Duration
 	for _, r := range results {
 		if r.err != nil {
 			stats.failed++
 			fmt.Fprintf(os.Stderr, "  [%3d] FAIL: %v\n", r.index, r.err)
 		} else {
 			stats.succeeded++
-			stats.createDurs = append(stats.createDurs, r.createDur)
-			stats.pendingDurs = append(stats.pendingDurs, r.pendingDur)
-			stats.readyDurs = append(stats.readyDurs, r.readyDur)
+			createDurs = append(createDurs, r.createDur)
+			pendingDurs = append(pendingDurs, r.pendingDur)
+			readyDurs = append(readyDurs, r.readyDur)
 		}
 	}
 
-	slices.SortFunc(stats.createDurs, func(a, b time.Duration) int { return int(a - b) })
-	slices.SortFunc(stats.pendingDurs, func(a, b time.Duration) int { return int(a - b) })
-	slices.SortFunc(stats.readyDurs, func(a, b time.Duration) int { return int(a - b) })
+	slices.SortFunc(createDurs, func(a, b time.Duration) int { return int(a - b) })
+	slices.SortFunc(pendingDurs, func(a, b time.Duration) int { return int(a - b) })
+	slices.SortFunc(readyDurs, func(a, b time.Duration) int { return int(a - b) })
+
+	// Extract percentiles.
+	for _, p := range pctDefs {
+		stats.createPcts[p.name] = pctValue(createDurs, p.p, p.name)
+		stats.pendingPcts[p.name] = pctValue(pendingDurs, p.p, p.name)
+		stats.readyPcts[p.name] = pctValue(readyDurs, p.p, p.name)
+	}
+	// Also store mean and stddev.
+	stats.createPcts["Mean"] = meanDur(createDurs)
+	stats.createPcts["Stddev"] = stddevDur(createDurs)
+	stats.pendingPcts["Mean"] = meanDur(pendingDurs)
+	stats.pendingPcts["Stddev"] = stddevDur(pendingDurs)
+	stats.readyPcts["Mean"] = meanDur(readyDurs)
+	stats.readyPcts["Stddev"] = stddevDur(readyDurs)
 
 	fmt.Fprintf(os.Stderr, "Done: %d succeeded, %d failed in %s\n",
 		stats.succeeded, stats.failed, totalDur.Round(time.Millisecond))
@@ -226,139 +276,126 @@ func bench(ctx context.Context, c *tensorlake.Client, idx int, timeout int64, po
 	return r
 }
 
-func printSummary(allStats []levelStats) {
-	pcts := []struct {
-		name string
-		p    float64
-	}{
-		{"P50", 0.50}, {"P75", 0.75}, {"P90", 0.90},
-		{"P95", 0.95}, {"P99", 0.99}, {"P99.9", 0.999},
-	}
+// printSummarySingle prints raw percentile values when repeat=1.
+func printSummarySingle(allRuns []runStats) {
+	printHeader(allRuns)
 
-	// Header.
-	fmt.Printf("%-12s", "Concurrency")
-	for _, s := range allStats {
-		fmt.Printf("  %10d", s.concurrency)
-	}
-	fmt.Println()
-	fmt.Printf("%-12s", "Succeeded")
-	for _, s := range allStats {
-		fmt.Printf("  %10d", s.succeeded)
-	}
-	fmt.Println()
-	fmt.Printf("%-12s", "Failed")
-	for _, s := range allStats {
-		fmt.Printf("  %10d", s.failed)
-	}
-	fmt.Println()
-	fmt.Printf("%-12s", "Wall time")
-	for _, s := range allStats {
-		fmt.Printf("  %10s", s.totalDur.Round(time.Millisecond))
-	}
-	fmt.Println()
+	rows := []string{"Min", "Mean", "Stddev", "P50", "P75", "P90", "P95", "P99", "P99.9", "Max"}
 
-	// Create API stats.
 	fmt.Printf("\n--- Create API Response Time (request → sandbox_id) ---\n")
-	printMetricRows(allStats, pcts, func(s levelStats) []time.Duration { return s.createDurs })
-
-	// Pending to running stats.
-	fmt.Printf("\n--- Pending to Running (pending → running) ---\n")
-	printMetricRows(allStats, pcts, func(s levelStats) []time.Duration { return s.pendingDurs })
-
-	// Total time to running stats.
-	fmt.Printf("\n--- Total Time to Running (request → running) ---\n")
-	printMetricRows(allStats, pcts, func(s levelStats) []time.Duration { return s.readyDurs })
-}
-
-func printMetricRows(allStats []levelStats, pcts []struct {
-	name string
-	p    float64
-}, getDurs func(levelStats) []time.Duration) {
-	// Min.
-	fmt.Printf("%-12s", "Min")
-	for _, s := range allStats {
-		d := getDurs(s)
-		if len(d) > 0 {
-			fmt.Printf("  %10s", d[0].Round(time.Millisecond))
-		} else {
-			fmt.Printf("  %10s", "-")
-		}
-	}
-	fmt.Println()
-
-	// Mean.
-	fmt.Printf("%-12s", "Mean")
-	for _, s := range allStats {
-		d := getDurs(s)
-		if len(d) > 0 {
-			fmt.Printf("  %10s", mean(d).Round(time.Millisecond))
-		} else {
-			fmt.Printf("  %10s", "-")
-		}
-	}
-	fmt.Println()
-
-	// Stddev.
-	fmt.Printf("%-12s", "Stddev")
-	for _, s := range allStats {
-		d := getDurs(s)
-		if len(d) > 0 {
-			fmt.Printf("  %10s", stddev(d).Round(time.Millisecond))
-		} else {
-			fmt.Printf("  %10s", "-")
-		}
-	}
-	fmt.Println()
-
-	// Percentiles.
-	for _, p := range pcts {
-		fmt.Printf("%-12s", p.name)
-		for _, s := range allStats {
-			d := getDurs(s)
-			if len(d) > 0 {
-				fmt.Printf("  %10s", percentile(d, p.p).Round(time.Millisecond))
-			} else {
-				fmt.Printf("  %10s", "-")
-			}
+	for _, row := range rows {
+		fmt.Printf("%-12s", row)
+		for _, s := range allRuns {
+			fmt.Printf("  %10s", s.createPcts[row].Round(time.Millisecond))
 		}
 		fmt.Println()
 	}
 
-	// Max.
-	fmt.Printf("%-12s", "Max")
-	for _, s := range allStats {
-		d := getDurs(s)
-		if len(d) > 0 {
-			fmt.Printf("  %10s", d[len(d)-1].Round(time.Millisecond))
-		} else {
-			fmt.Printf("  %10s", "-")
+	fmt.Printf("\n--- Pending to Running (pending → running) ---\n")
+	for _, row := range rows {
+		fmt.Printf("%-12s", row)
+		for _, s := range allRuns {
+			fmt.Printf("  %10s", s.pendingPcts[row].Round(time.Millisecond))
 		}
+		fmt.Println()
+	}
+
+	fmt.Printf("\n--- Total Time to Running (request → running) ---\n")
+	for _, row := range rows {
+		fmt.Printf("%-12s", row)
+		for _, s := range allRuns {
+			fmt.Printf("  %10s", s.readyPcts[row].Round(time.Millisecond))
+		}
+		fmt.Println()
+	}
+}
+
+// printSummaryRepeated prints mean±std across repeats for each percentile.
+func printSummaryRepeated(allRuns [][]runStats) {
+	// Build a flat header from the first run of each level.
+	var header []runStats
+	for _, runs := range allRuns {
+		if len(runs) > 0 {
+			header = append(header, runs[0])
+		}
+	}
+	printHeaderRepeated(header, len(allRuns[0]))
+
+	rows := []string{"Min", "Mean", "Stddev", "P50", "P75", "P90", "P95", "P99", "P99.9", "Max"}
+
+	fmt.Printf("\n--- Create API Response Time (request → sandbox_id) ---\n")
+	printRepeatedMetric(allRuns, rows, func(s runStats) map[string]time.Duration { return s.createPcts })
+
+	fmt.Printf("\n--- Pending to Running (pending → running) ---\n")
+	printRepeatedMetric(allRuns, rows, func(s runStats) map[string]time.Duration { return s.pendingPcts })
+
+	fmt.Printf("\n--- Total Time to Running (request → running) ---\n")
+	printRepeatedMetric(allRuns, rows, func(s runStats) map[string]time.Duration { return s.readyPcts })
+}
+
+func printRepeatedMetric(allRuns [][]runStats, rows []string, getPcts func(runStats) map[string]time.Duration) {
+	for _, row := range rows {
+		fmt.Printf("%-12s", row)
+		for _, runs := range allRuns {
+			var vals []float64
+			for _, s := range runs {
+				vals = append(vals, float64(getPcts(s)[row]))
+			}
+			m := meanF(vals)
+			sd := stddevF(vals)
+			fmt.Printf("  %8s±%-5s",
+				time.Duration(m).Round(time.Millisecond),
+				time.Duration(sd).Round(time.Millisecond))
+		}
+		fmt.Println()
+	}
+}
+
+func printHeader(allRuns []runStats) {
+	fmt.Printf("%-12s", "Concurrency")
+	for _, s := range allRuns {
+		fmt.Printf("  %10d", s.concurrency)
+	}
+	fmt.Println()
+	fmt.Printf("%-12s", "Succeeded")
+	for _, s := range allRuns {
+		fmt.Printf("  %10d", s.succeeded)
+	}
+	fmt.Println()
+	fmt.Printf("%-12s", "Failed")
+	for _, s := range allRuns {
+		fmt.Printf("  %10d", s.failed)
+	}
+	fmt.Println()
+	fmt.Printf("%-12s", "Wall time")
+	for _, s := range allRuns {
+		fmt.Printf("  %10s", s.totalDur.Round(time.Millisecond))
 	}
 	fmt.Println()
 }
 
-func mean(durs []time.Duration) time.Duration {
-	if len(durs) == 0 {
-		return 0
+func printHeaderRepeated(header []runStats, repeats int) {
+	fmt.Printf("Repeats: %d\n\n", repeats)
+	fmt.Printf("%-12s", "Concurrency")
+	for _, s := range header {
+		fmt.Printf("  %14d", s.concurrency)
 	}
-	var sum time.Duration
-	for _, d := range durs {
-		sum += d
-	}
-	return sum / time.Duration(len(durs))
+	fmt.Println()
 }
 
-func stddev(durs []time.Duration) time.Duration {
-	if len(durs) == 0 {
+// pctValue extracts a percentile or min/max from sorted durations.
+func pctValue(sorted []time.Duration, p float64, name string) time.Duration {
+	if len(sorted) == 0 {
 		return 0
 	}
-	m := mean(durs)
-	var varianceSum float64
-	for _, d := range durs {
-		diff := float64(d - m)
-		varianceSum += diff * diff
+	switch name {
+	case "Min":
+		return sorted[0]
+	case "Max":
+		return sorted[len(sorted)-1]
+	default:
+		return percentile(sorted, p)
 	}
-	return time.Duration(math.Sqrt(varianceSum / float64(len(durs))))
 }
 
 func percentile(sorted []time.Duration, p float64) time.Duration {
@@ -373,4 +410,52 @@ func percentile(sorted []time.Duration, p float64) time.Duration {
 		idx = len(sorted) - 1
 	}
 	return sorted[idx]
+}
+
+func meanDur(durs []time.Duration) time.Duration {
+	if len(durs) == 0 {
+		return 0
+	}
+	var sum time.Duration
+	for _, d := range durs {
+		sum += d
+	}
+	return sum / time.Duration(len(durs))
+}
+
+func stddevDur(durs []time.Duration) time.Duration {
+	if len(durs) == 0 {
+		return 0
+	}
+	m := meanDur(durs)
+	var varianceSum float64
+	for _, d := range durs {
+		diff := float64(d - m)
+		varianceSum += diff * diff
+	}
+	return time.Duration(math.Sqrt(varianceSum / float64(len(durs))))
+}
+
+func meanF(vals []float64) float64 {
+	if len(vals) == 0 {
+		return 0
+	}
+	var sum float64
+	for _, v := range vals {
+		sum += v
+	}
+	return sum / float64(len(vals))
+}
+
+func stddevF(vals []float64) float64 {
+	if len(vals) == 0 {
+		return 0
+	}
+	m := meanF(vals)
+	var varianceSum float64
+	for _, v := range vals {
+		diff := v - m
+		varianceSum += diff * diff
+	}
+	return math.Sqrt(varianceSum / float64(len(vals)))
 }
