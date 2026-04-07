@@ -15,6 +15,8 @@
 package tensorlake
 
 import (
+	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -31,34 +33,84 @@ func initializeSandboxClient(t *testing.T) *Client {
 	return NewClient(WithAPIKey(apiKey))
 }
 
-func TestSandboxLifecycle(t *testing.T) {
+// waitForStatus polls GetSandbox until the sandbox reaches the desired status
+// or the timeout (60s) is exceeded.
+func waitForStatus(t *testing.T, c *Client, sandboxID string, want SandboxStatus) *SandboxInfo {
+	t.Helper()
+	var info *SandboxInfo
+	var err error
+	for range 30 {
+		info, err = c.GetSandbox(t.Context(), sandboxID)
+		if err != nil {
+			t.Fatalf("failed to get sandbox %s: %v", sandboxID, err)
+		}
+		if info.Status == want {
+			return info
+		}
+		t.Logf("sandbox %s: status=%s, waiting for %s...", sandboxID, info.Status, want)
+		time.Sleep(2 * time.Second)
+	}
+	t.Fatalf("sandbox %s: timed out waiting for status %s (current: %s)", sandboxID, want, info.Status)
+	return nil
+}
+
+// deleteSandbox is a cleanup helper that terminates a sandbox, ignoring errors.
+// Uses a fresh background context to avoid test context cancellation.
+func deleteSandbox(t *testing.T, c *Client, sandboxID string) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := c.DeleteSandbox(ctx, sandboxID); err != nil {
+		t.Logf("cleanup: failed to delete sandbox %s: %v", sandboxID, err)
+	}
+}
+
+// TestSandboxFullLifecycle exercises every state transition:
+//
+//	create → pending → running
+//	  → file write/read/list/delete (file operations while running)
+//	  → update (change exposed ports)
+//	  → snapshot (running → snapshotting → running)
+//	  → suspend (running → suspending → suspended)
+//	  → resume (suspended → pending → running)
+//	  → delete (running → terminated)
+//	  → restore from snapshot (create with snapshot_id)
+//	  → delete restored sandbox
+func TestSandboxFullLifecycle(t *testing.T) {
 	c := initializeSandboxClient(t)
 
-	// Create sandbox.
+	name := fmt.Sprintf("test-lifecycle-%d", time.Now().UnixNano())
+
+	// ── Create ──────────────────────────────────────────────────
+	t.Log("=== create sandbox")
 	createResp, err := c.CreateSandbox(t.Context(), &CreateSandboxRequest{
-		TimeoutSecs: ptr(int64(300)),
+		Name:        name,
+		TimeoutSecs: ptr(int64(600)),
 	})
 	if err != nil {
-		t.Fatalf("failed to create sandbox: %v", err)
+		t.Fatalf("CreateSandbox: %v", err)
 	}
-	t.Logf("sandbox created: %+v", createResp)
-
-	if createResp.SandboxId == "" {
-		t.Fatal("SandboxId is empty")
-	}
-
 	sandboxID := createResp.SandboxId
-	t.Cleanup(func() {
-		_ = c.DeleteSandbox(t.Context(), sandboxID)
-	})
+	t.Logf("created sandbox %s, status=%s", sandboxID, createResp.Status)
 
-	// List sandboxes.
-	listResp, err := c.ListSandboxes(t.Context(), &ListSandboxesRequest{Limit: 10})
-	if err != nil {
-		t.Fatalf("failed to list sandboxes: %v", err)
+	// Register cleanup first — always runs, even on fatal.
+	t.Cleanup(func() { deleteSandbox(t, c, sandboxID) })
+
+	if createResp.Status != SandboxStatusPending && createResp.Status != SandboxStatusRunning {
+		t.Fatalf("unexpected initial status: %s", createResp.Status)
 	}
-	t.Logf("listed %d sandboxes", len(listResp.Sandboxes))
 
+	// ── pending → running ───────────────────────────────────────
+	t.Log("=== wait for running")
+	info := waitForStatus(t, c, sandboxID, SandboxStatusRunning)
+	t.Logf("sandbox running: cpus=%.1f memory_mb=%d", info.Resources.CPUs, info.Resources.MemoryMB)
+
+	// ── List sandboxes ──────────────────────────────────────────
+	t.Log("=== list sandboxes")
+	listResp, err := c.ListSandboxes(t.Context(), &ListSandboxesRequest{Limit: 50})
+	if err != nil {
+		t.Fatalf("ListSandboxes: %v", err)
+	}
 	found := false
 	for _, sb := range listResp.Sandboxes {
 		if sb.Id == sandboxID {
@@ -67,121 +119,163 @@ func TestSandboxLifecycle(t *testing.T) {
 		}
 	}
 	if !found {
-		t.Errorf("sandbox %s not found in list", sandboxID)
+		t.Fatalf("sandbox %s not found in list (%d sandboxes)", sandboxID, len(listResp.Sandboxes))
 	}
 
-	// Get sandbox.
-	info, err := c.GetSandbox(t.Context(), sandboxID)
+	// ── Get sandbox ─────────────────────────────────────────────
+	t.Log("=== get sandbox")
+	info, err = c.GetSandbox(t.Context(), sandboxID)
 	if err != nil {
-		t.Fatalf("failed to get sandbox: %v", err)
+		t.Fatalf("GetSandbox: %v", err)
 	}
-	t.Logf("sandbox info: %+v", info)
-
-	if info.Id != sandboxID {
-		t.Errorf("Id = %q, want %q", info.Id, sandboxID)
+	if info.Name != name {
+		t.Errorf("Name = %q, want %q", info.Name, name)
 	}
 
-	// Update sandbox.
+	// ── Update sandbox ──────────────────────────────────────────
+	t.Log("=== update sandbox")
 	updated, err := c.UpdateSandbox(t.Context(), sandboxID, &UpdateSandboxRequest{
-		ExposedPorts: []int32{8080},
+		ExposedPorts: []int32{8080, 3000},
 	})
 	if err != nil {
-		t.Fatalf("failed to update sandbox: %v", err)
+		t.Fatalf("UpdateSandbox: %v", err)
 	}
-	t.Logf("sandbox updated: %+v", updated)
+	if len(updated.ExposedPorts) != 2 {
+		t.Errorf("ExposedPorts = %v, want [8080, 3000]", updated.ExposedPorts)
+	}
 
-	// Delete sandbox.
-	err = c.DeleteSandbox(t.Context(), sandboxID)
+	// ── File operations (while running) ─────────────────────────
+	t.Log("=== file operations")
+	content := []byte("lifecycle test content")
+	err = c.WriteSandboxFile(t.Context(), sandboxID, "/workspace/lifecycle.txt", bytes.NewReader(content))
 	if err != nil {
-		t.Fatalf("failed to delete sandbox: %v", err)
+		t.Fatalf("WriteSandboxFile: %v", err)
 	}
-	t.Log("sandbox deleted")
-}
 
-func TestSandboxSuspendResume(t *testing.T) {
-	c := initializeSandboxClient(t)
-
-	// Create a named sandbox (only named sandboxes can be suspended).
-	name := fmt.Sprintf("test-sr-%d", time.Now().UnixNano())
-	createResp, err := c.CreateSandbox(t.Context(), &CreateSandboxRequest{
-		Name:        name,
-		TimeoutSecs: ptr(int64(300)),
-	})
+	data, err := c.ReadSandboxFile(t.Context(), sandboxID, "/workspace/lifecycle.txt")
 	if err != nil {
-		t.Fatalf("failed to create sandbox: %v", err)
+		t.Fatalf("ReadSandboxFile: %v", err)
 	}
-	sandboxID := createResp.SandboxId
-	t.Logf("sandbox created: %s", sandboxID)
+	if string(data) != string(content) {
+		t.Errorf("file content = %q, want %q", string(data), string(content))
+	}
 
-	t.Cleanup(func() {
-		_ = c.ResumeSandbox(t.Context(), sandboxID)
-		_ = c.DeleteSandbox(t.Context(), sandboxID)
-	})
-
-	// Wait for sandbox to be running before suspend.
-	info, err := c.GetSandbox(t.Context(), sandboxID)
+	dirResp, err := c.ListSandboxDirectory(t.Context(), sandboxID, "/workspace")
 	if err != nil {
-		t.Fatalf("failed to get sandbox: %v", err)
+		t.Fatalf("ListSandboxDirectory: %v", err)
 	}
-	t.Logf("sandbox status: %s", info.Status)
-
-	// Suspend.
-	err = c.SuspendSandbox(t.Context(), sandboxID)
-	if err != nil {
-		t.Fatalf("failed to suspend sandbox: %v", err)
-	}
-	t.Log("sandbox suspend initiated")
-
-	// Wait for sandbox to be suspended.
-	for range 30 {
-		info, err = c.GetSandbox(t.Context(), sandboxID)
-		if err != nil {
-			t.Fatalf("failed to get sandbox: %v", err)
-		}
-		if info.Status == SandboxStatusSuspended {
+	foundFile := false
+	for _, entry := range dirResp.Entries {
+		if entry.Name == "lifecycle.txt" && !entry.IsDir {
+			foundFile = true
 			break
 		}
-		t.Logf("sandbox status: %s, waiting...", info.Status)
+	}
+	if !foundFile {
+		t.Error("lifecycle.txt not found in directory listing")
+	}
+
+	err = c.DeleteSandboxFile(t.Context(), sandboxID, "/workspace/lifecycle.txt")
+	if err != nil {
+		t.Fatalf("DeleteSandboxFile: %v", err)
+	}
+
+	_, err = c.ReadSandboxFile(t.Context(), sandboxID, "/workspace/lifecycle.txt")
+	if err == nil {
+		t.Error("expected error reading deleted file, got nil")
+	}
+
+	// ── Snapshot (running → snapshotting → running) ─────────────
+	t.Log("=== snapshot sandbox")
+	snapResp, err := c.SnapshotSandbox(t.Context(), sandboxID, nil)
+	if err != nil {
+		t.Fatalf("SnapshotSandbox: %v", err)
+	}
+	if snapResp.SnapshotId == "" {
+		t.Fatal("SnapshotId is empty")
+	}
+	snapshotID := snapResp.SnapshotId
+	t.Logf("snapshot created: %s (status=%s)", snapshotID, snapResp.Status)
+
+	// Wait for snapshot to complete. The sandbox status may briefly show
+	// "snapshotting" then return to "running", but the snapshot operation
+	// can still be in progress internally. Poll until suspend succeeds.
+	t.Log("waiting for snapshot to complete...")
+	for range 30 {
+		err = c.SuspendSandbox(t.Context(), sandboxID)
+		if err == nil {
+			break
+		}
+		t.Logf("suspend not ready yet: %v", err)
 		time.Sleep(2 * time.Second)
 	}
-	if info.Status != SandboxStatusSuspended {
-		t.Fatalf("sandbox did not suspend, status: %s", info.Status)
-	}
 
-	// Resume.
+	// ── Suspend (running → suspending → suspended) ──────────────
+	t.Log("=== suspend sandbox")
+	if err != nil {
+		t.Fatalf("SuspendSandbox: %v", err)
+	}
+	waitForStatus(t, c, sandboxID, SandboxStatusSuspended)
+	t.Log("sandbox suspended")
+
+	// ── Resume (suspended → pending → running) ──────────────────
+	t.Log("=== resume sandbox")
 	err = c.ResumeSandbox(t.Context(), sandboxID)
 	if err != nil {
-		t.Fatalf("failed to resume sandbox: %v", err)
+		t.Fatalf("ResumeSandbox: %v", err)
 	}
-	t.Log("sandbox resume initiated")
-}
+	waitForStatus(t, c, sandboxID, SandboxStatusRunning)
+	t.Log("sandbox resumed and running")
 
-func TestSandboxSnapshot(t *testing.T) {
-	c := initializeSandboxClient(t)
+	// ── Delete (running → terminated) ───────────────────────────
+	t.Log("=== delete sandbox")
+	err = c.DeleteSandbox(t.Context(), sandboxID)
+	if err != nil {
+		t.Fatalf("DeleteSandbox: %v", err)
+	}
 
-	createResp, err := c.CreateSandbox(t.Context(), &CreateSandboxRequest{
+	// Verify terminated.
+	info, err = c.GetSandbox(t.Context(), sandboxID)
+	if err != nil {
+		t.Fatalf("GetSandbox after delete: %v", err)
+	}
+	if info.Status != SandboxStatusTerminated {
+		t.Errorf("status after delete = %s, want terminated", info.Status)
+	}
+	t.Log("sandbox terminated")
+
+	// ── Idempotent delete ───────────────────────────────────────
+	t.Log("=== idempotent delete")
+	err = c.DeleteSandbox(t.Context(), sandboxID)
+	if err != nil {
+		t.Fatalf("idempotent DeleteSandbox: %v", err)
+	}
+
+	// ── Restore from snapshot ───────────────────────────────────
+	t.Log("=== restore from snapshot")
+	restoreResp, err := c.CreateSandbox(t.Context(), &CreateSandboxRequest{
+		SnapshotId:  snapshotID,
 		TimeoutSecs: ptr(int64(300)),
 	})
 	if err != nil {
-		t.Fatalf("failed to create sandbox: %v", err)
+		t.Fatalf("CreateSandbox (restore): %v", err)
 	}
-	sandboxID := createResp.SandboxId
-	t.Logf("sandbox created: %s", sandboxID)
+	restoredID := restoreResp.SandboxId
+	t.Logf("restored sandbox %s from snapshot %s", restoredID, snapshotID)
 
-	t.Cleanup(func() {
-		_ = c.DeleteSandbox(t.Context(), sandboxID)
-	})
+	// Clean up restored sandbox.
+	t.Cleanup(func() { deleteSandbox(t, c, restoredID) })
 
-	// Snapshot.
-	snapResp, err := c.SnapshotSandbox(t.Context(), sandboxID, nil)
+	waitForStatus(t, c, restoredID, SandboxStatusRunning)
+	t.Log("restored sandbox running")
+
+	err = c.DeleteSandbox(t.Context(), restoredID)
 	if err != nil {
-		t.Fatalf("failed to snapshot sandbox: %v", err)
+		t.Fatalf("DeleteSandbox (restored): %v", err)
 	}
-	t.Logf("snapshot created: %+v", snapResp)
+	t.Log("restored sandbox terminated")
 
-	if snapResp.SnapshotId == "" {
-		t.Error("SnapshotId is empty")
-	}
+	t.Log("=== full lifecycle complete")
 }
 
 func TestSandboxInfoDeserialization(t *testing.T) {
