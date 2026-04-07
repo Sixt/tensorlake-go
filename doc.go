@@ -14,9 +14,15 @@
 
 // Package tensorlake provides a Go SDK for the Tensorlake API.
 //
-// Tensorlake enables document parsing, structured data extraction, and page
-// classification for various document formats including PDF, DOCX, PPTX, images,
-// and more.
+// Tensorlake enables document parsing, structured data extraction, page
+// classification, and cloud sandbox management for various document formats
+// including PDF, DOCX, PPTX, images, and more.
+//
+// The SDK covers three main areas:
+//
+//   - Document APIs: file management, parsing, extraction, classification, and datasets
+//   - Sandbox APIs: create, manage, snapshot, suspend/resume cloud sandboxes
+//   - Sandbox interaction: file operations, PTY terminal sessions, and process management
 //
 // # Getting Started
 //
