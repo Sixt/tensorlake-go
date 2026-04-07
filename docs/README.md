@@ -1,6 +1,6 @@
 # Tensorlake Go SDK Documentation
 
-Welcome to the Tensorlake Go SDK documentation! This guide covers all APIs for intelligent document processing.
+Welcome to the Tensorlake Go SDK documentation! This guide covers all APIs for intelligent document processing and cloud sandbox management.
 
 ## Documentation Index
 
