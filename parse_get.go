@@ -148,10 +148,15 @@ func (c *Client) handleSSEResponse(req *http.Request, onUpdate ParseResultUpdate
 		return &result, nil
 	}
 
+	var lastEvent string
+	var eventCount int
 	for ev, err := range sse.ScanEvents(resp.Body) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan SSE events: %w", err)
 		}
+
+		lastEvent = ev.Name()
+		eventCount++
 
 		// Unmarshal the event data into a ParseResult.
 		var result ParseResult
@@ -182,5 +187,8 @@ func (c *Client) handleSSEResponse(req *http.Request, onUpdate ParseResultUpdate
 		}
 	}
 
-	panic("unreachable")
+	if eventCount == 0 {
+		return nil, fmt.Errorf("SSE stream closed without sending any events")
+	}
+	return nil, fmt.Errorf("SSE stream ended after %d event(s), last event %q, without a terminal event (parse_done or parse_failed)", eventCount, lastEvent)
 }
